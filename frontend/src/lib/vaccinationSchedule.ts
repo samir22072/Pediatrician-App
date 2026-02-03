@@ -1,0 +1,16 @@
+export const VACCINATION_SCHEDULE = [
+    { label: 'At Birth', age_days: 0, vaccines: ["BCG", "OPV-0", "Hep-B1"] },
+    { label: '6 Weeks', age_days: 42, vaccines: ["DTwP-1/DTaP-1", "IPV-1", "Hep-B2", "Hib-1", "Rotavirus-1", "PCV-1"] },
+    { label: '10 Weeks', age_days: 70, vaccines: ["DTwP-2/DTaP-2", "IPV-2", "Hib-2", "Rotavirus-2", "PCV-2"] },
+    { label: '14 Weeks', age_days: 98, vaccines: ["DTwP-3/DTaP-3", "IPV-3", "Hep-B3", "Hib-3", "Rotavirus-3", "PCV-3"] },
+    { label: '6 Months', age_days: 180, vaccines: ["OPV-1", "Hep-B4", "Influenza-1", "Typhoid Conjugate Vaccine"] },
+    { label: '7 Months', age_days: 210, vaccines: ["Influenza-2"] },
+    { label: '9 Months', age_days: 270, vaccines: ["MMR-1"] },
+    { label: '12 Months', age_days: 365, vaccines: ["Hep-A1"] },
+    { label: '15 Months', age_days: 450, vaccines: ["MMR-2", "Varicella-1", "PCV Booster"] },
+    { label: '16-18 Months', age_days: 500, vaccines: ["DTwP-B1/DTaP-B1", "IPV-B1", "Hib-B1"] },
+    { label: '18 Months', age_days: 540, vaccines: ["Hep-A2"] },
+    { label: '2 Years', age_days: 730, vaccines: ["Typhoid Booster"] },
+    { label: '4-6 Years', age_days: 1825, vaccines: ["DTwP-B2/DTaP-B2", "IPV-B2", "Varicella-2", "MMR-3"] },
+    { label: '10-12 Years', age_days: 3650, vaccines: ["Tdap/Td", "HPV (Girls)"] },
+];
