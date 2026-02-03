@@ -39,4 +39,7 @@ export interface Patient {
     visits?: Visit[];
     vaccinations?: Vaccination[];
     created_at: string;
+    calculated_age?: number;
+    initial_weight?: number;
+    initial_height?: number;
 }

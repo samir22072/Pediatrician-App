@@ -1,36 +1,65 @@
 import React, { useState } from 'react';
 import { Patient, Visit } from '@/lib/types';
 import { ArrowLeft, Plus, Edit, Activity, Syringe, ClipboardList } from 'lucide-react';
+import AIChat from './AIChat';
 import ChartViewer from './ChartViewer';
 import VaccinationChecklist from './VaccinationChecklist';
+import NavbarActions from './NavbarActions';
 
 interface PatientDetailsProps {
     patient: Patient;
     onBack: () => void;
     onAddVisit: () => void;
     onEditVisit: (visit: Visit) => void;
+    onTransferToVisit: (summary: any) => void;
 }
 
-type Tab = 'charts' | 'vaccinations' | 'history';
+type Tab = 'ai_triage' | 'charts' | 'vaccinations' | 'history';
 
-export default function PatientDetails({ patient, onBack, onAddVisit, onEditVisit }: PatientDetailsProps) {
-    const [activeTab, setActiveTab] = useState<Tab>('charts');
+export default function PatientDetails({ patient, onBack, onAddVisit, onEditVisit, onTransferToVisit }: PatientDetailsProps) {
+    const [activeTab, setActiveTab] = useState<Tab>('ai_triage');
 
     const visits = patient.visits || [];
     const vaccinations = patient.vaccinations || [];
     const lastVisit = visits.length > 0 ? visits[visits.length - 1] : null;
 
+    const calculateAge = (dob: string) => {
+        const birthDate = new Date(dob);
+        const today = new Date();
+        const diffTime = Math.abs(today.getTime() - birthDate.getTime());
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        const months = diffDays / 30.44; // Avg days per month
+        const years = months / 12;
+
+        if (years < 1) {
+            return `${Math.floor(months)} months`;
+        } else {
+            return `${years.toFixed(1)} yrs`;
+        }
+    };
+
+    const patientStats = {
+        age: calculateAge(patient.dob),
+        weight: lastVisit?.weight || patient.initial_weight,
+        height: lastVisit?.height || patient.initial_height
+    };
+
     return (
         <div className="animate-fade-in" style={{ height: 'calc(100vh - 80px)', display: 'flex', flexDirection: 'column' }}>
-            {/* Top Bar Navigation */}
-            <div style={{ paddingBottom: '1rem', borderBottom: '1px solid var(--glass-border)', marginBottom: '1.5rem', display: 'flex', justifyContent: 'space-between' }}>
-                <button onClick={onBack} className="btn" style={{ backgroundColor: 'transparent', paddingLeft: 0, justifyContent: 'flex-start', color: 'hsl(var(--text-secondary))' }}>
-                    <ArrowLeft size={20} /> Back to Patients
+            <NavbarActions>
+                <button onClick={onBack} className="btn" style={{
+                    backgroundColor: 'transparent',
+                    color: 'hsl(var(--text-secondary))',
+                    marginRight: 'auto',
+                    border: '1px solid var(--glass-border)',
+                    fontSize: '0.85rem'
+                }}>
+                    <ArrowLeft size={16} /> Back
                 </button>
-                <button onClick={onAddVisit} className="btn btn-primary">
-                    <Plus size={18} /> Add Visit
+                <button onClick={onAddVisit} className="btn btn-primary" style={{ fontSize: '0.85rem' }}>
+                    <Plus size={16} /> Add Visit
                 </button>
-            </div>
+            </NavbarActions>
 
             <div style={{ display: 'grid', gridTemplateColumns: '300px 1fr', gap: '2rem', flex: 1, minHeight: 0 }}>
 
@@ -49,43 +78,41 @@ export default function PatientDetails({ patient, onBack, onAddVisit, onEditVisi
                             </span>
                         </div>
                         <h2 style={{ margin: 0, fontSize: '1.5rem' }}>{patient.name}</h2>
+                        <div style={{ fontSize: '0.9rem', color: 'hsl(var(--text-secondary))', marginTop: '0.5rem' }}>
+                            {patient.gender} • {patient.dob}
+                        </div>
 
-
+                        {/* Vitals Grid (Merged) */}
                         <div style={{ marginTop: '2rem', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', textAlign: 'left' }}>
-                            <div>
-                                <div className="label">Full Age</div>
-                                <div style={{ fontWeight: 600 }}>{lastVisit ? `${lastVisit.age} yrs` : 'New'}</div>
+                            <div style={{ gridColumn: '1 / -1', paddingBottom: '1rem', borderBottom: '1px solid var(--glass-border)', marginBottom: '0.5rem' }}>
+                                <div className="label" style={{ fontSize: '0.8rem', color: 'hsl(var(--text-secondary))' }}>Current Age</div>
+                                <div style={{ fontSize: '1.5rem', fontWeight: 700, color: 'white' }}>
+                                    {calculateAge(patient.dob)}
+                                </div>
                             </div>
-                            <div>
-                                <div className="label">Gender</div>
-                                <div style={{ fontWeight: 600 }}>{patient.gender}</div>
-                            </div>
-                            <div>
-                                <div className="label">DOB</div>
-                                <div style={{ fontWeight: 600 }}>{patient.dob}</div>
-                            </div>
+
+                            {lastVisit ? (
+                                <>
+                                    <div>
+                                        <div className="label" style={{ fontSize: '0.8rem', color: 'hsl(var(--text-secondary))' }}>Weight</div>
+                                        <div style={{ fontSize: '1.2rem', fontWeight: 600, color: 'hsl(var(--primary))' }}>
+                                            {lastVisit.weight} kg
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <div className="label" style={{ fontSize: '0.8rem', color: 'hsl(var(--text-secondary))' }}>Height</div>
+                                        <div style={{ fontSize: '1.2rem', fontWeight: 600, color: 'hsl(var(--success))' }}>
+                                            {lastVisit.height} cm
+                                        </div>
+                                    </div>
+                                </>
+                            ) : (
+                                <div style={{ gridColumn: '1 / -1', fontSize: '0.9rem', fontStyle: 'italic', color: 'hsl(var(--text-secondary))' }}>
+                                    No vitals recorded
+                                </div>
+                            )}
                         </div>
                     </div>
-
-                    {/* Vitals Summary */}
-                    {lastVisit && (
-                        <div className="card">
-                            <h3 style={{ fontSize: '1.1rem', marginBottom: '1rem', color: 'hsl(var(--text-primary))' }}>Latest Reading</h3>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                    <span style={{ color: 'hsl(var(--text-secondary))' }}>Weight</span>
-                                    <span style={{ fontWeight: 'bold', color: 'hsl(var(--primary))' }}>{lastVisit.weight} kg</span>
-                                </div>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                    <span style={{ color: 'hsl(var(--text-secondary))' }}>Height</span>
-                                    <span style={{ fontWeight: 'bold', color: 'hsl(var(--success))' }}>{lastVisit.height} cm</span>
-                                </div>
-                            </div>
-                            <div style={{ marginTop: '1rem', fontSize: '0.85rem', color: 'hsl(var(--text-secondary))', textAlign: 'center' }}>
-                                Date: {lastVisit.date}
-                            </div>
-                        </div>
-                    )}
                 </div>
 
                 {/* Right Panel: Tabs & Content */}
@@ -94,6 +121,7 @@ export default function PatientDetails({ patient, onBack, onAddVisit, onEditVisi
                     {/* Tab Navigation */}
                     <div style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem', borderBottom: '1px solid var(--glass-border)' }}>
                         {[
+                            { id: 'ai_triage', label: 'AI Triage', icon: <div style={{ fontSize: '1.2em' }}>✨</div> }, // Using emoji as quick icon, otherwise import Sparkles
                             { id: 'charts', label: 'Growth Charts', icon: <Activity size={18} /> },
                             { id: 'vaccinations', label: 'Vaccinations', icon: <Syringe size={18} /> },
                             { id: 'history', label: 'Visit History', icon: <ClipboardList size={18} /> }
@@ -122,6 +150,17 @@ export default function PatientDetails({ patient, onBack, onAddVisit, onEditVisi
 
                     {/* Scrollable Content Area */}
                     <div style={{ flex: 1, overflowY: 'auto' }}>
+                        {activeTab === 'ai_triage' && (
+                            <div className="animate-fade-in" style={{ height: '100%' }}>
+                                <AIChat
+                                    patientName={patient.name}
+                                    patientId={String(patient.id)}
+                                    patientStats={patientStats}
+                                    onTransfer={onTransferToVisit}
+                                />
+                            </div>
+                        )}
+
                         {activeTab === 'charts' && (
                             <div className="animate-fade-in">
                                 <ChartViewer visits={visits} gender={patient.gender} />

@@ -45,6 +45,9 @@ export default function Header() {
                     Deep Space Command
                 </p>
             </div>
+
+            {/* Action Portal Target */}
+            <div id="navbar-actions" style={{ marginLeft: 'auto', display: 'flex', gap: '1rem', alignItems: 'center' }}></div>
         </header>
     );
 }
