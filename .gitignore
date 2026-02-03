@@ -20,6 +20,8 @@ dist-ssr
 out/
 build/
 .vercel
+.vite/
+
 
 # Python / Django Backend
 venv
