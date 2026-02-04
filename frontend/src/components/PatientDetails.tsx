@@ -24,18 +24,26 @@ export default function PatientDetails({ patient, onBack, onAddVisit, onEditVisi
     const lastVisit = visits.length > 0 ? visits[visits.length - 1] : null;
 
     const calculateAge = (dob: string) => {
+        if (!dob) return 'N/A';
         const birthDate = new Date(dob);
         const today = new Date();
-        const diffTime = Math.abs(today.getTime() - birthDate.getTime());
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-        const months = diffDays / 30.44; // Avg days per month
-        const years = months / 12;
 
-        if (years < 1) {
-            return `${Math.floor(months)} months`;
-        } else {
-            return `${years.toFixed(1)} yrs`;
+        let years = today.getFullYear() - birthDate.getFullYear();
+        let months = today.getMonth() - birthDate.getMonth();
+        let days = today.getDate() - birthDate.getDate();
+
+        if (days < 0) {
+            months--;
+            // get days in previous month
+            const prevMonthDate = new Date(today.getFullYear(), today.getMonth(), 0);
+            days += prevMonthDate.getDate();
         }
+        if (months < 0) {
+            years--;
+            months += 12;
+        }
+
+        return `${years}y ${months}m ${days}d`;
     };
 
     const patientStats = {

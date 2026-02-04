@@ -26,7 +26,7 @@ export default function PatientDetailsPage() {
     const fetchPatientDetails = async (patientId: string) => {
         try {
             setLoading(true);
-            const res = await api.get(`patients/${patientId}/`);
+            const res = await api.post('patients/detail/', { id: patientId });
             setPatient(res.data);
         } catch (err) {
             console.error("Failed to fetch patient", err);
@@ -38,7 +38,7 @@ export default function PatientDetailsPage() {
 
     const handleAddVisit = async (data: any) => {
         try {
-            await api.post('visits/', { ...data, patient: id });
+            await api.post('visits/create/', { ...data, patient: id });
             await fetchPatientDetails(id as string);
             setView('DETAILS');
         } catch (err) {
@@ -49,7 +49,7 @@ export default function PatientDetailsPage() {
     const handleEditVisit = async (data: any) => {
         if (!editingVisit) return;
         try {
-            await api.patch(`visits/${editingVisit.id}/`, data);
+            await api.post('visits/update/', { ...data, id: editingVisit.id });
             await fetchPatientDetails(id as string);
             setEditingVisit(null);
             setView('DETAILS');
@@ -111,6 +111,8 @@ export default function PatientDetailsPage() {
                                 return (diff / (1000 * 60 * 60 * 24 * 365.25)).toFixed(2);
                             })() : ''
                         })}
+
+
                         patientDOB={patient.dob}
                     />
                 </Modal>

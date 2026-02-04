@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { User, Plus, ChevronRight, Activity, Search, Users, Baby } from 'lucide-react';
+import { User, Plus, ChevronRight, Activity, Search, Users, Baby, ClipboardList, Stethoscope } from 'lucide-react';
 import { Patient } from '@/lib/types';
 
 interface PatientListProps {
@@ -52,9 +52,9 @@ export default function PatientList({ patients, onSelectPatient, onAddNew }: Pat
 
             {/* Stats Grid */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1.5rem', marginBottom: '2.5rem' }}>
-                <StatsCard icon={<Users />} label="Total Patients" value={totalPatients} color="var(--primary)" />
-                <StatsCard icon={<Activity />} label="Total Visits" value={totalVisits} color="var(--success)" />
-                <StatsCard icon={<Baby />} label="Avg. Age" value={`${avgAge} yrs`} color="var(--warning)" />
+                <StatsCard icon={<Users size={32} />} label="Total Patients" value={totalPatients} color="var(--primary)" />
+                <StatsCard icon={<ClipboardList size={32} />} label="Total Visits" value={totalVisits} color="var(--success)" />
+                <StatsCard icon={<Baby size={32} />} label="Avg. Age" value={`${avgAge} yrs`} color="var(--warning)" />
             </div>
 
             {/* Grid */}
@@ -154,9 +154,10 @@ function StatsCard({ icon, label, value, color }: { icon: React.ReactNode, label
     return (
         <div className="card" style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
             <div style={{
-                padding: '0.75rem', borderRadius: '50%',
+                padding: '1rem', borderRadius: '50%',
                 backgroundColor: 'rgba(255,255,255,0.05)',
-                border: `1px solid ${color}33` // 20% opacity hex
+                border: `1px solid ${color}33`, // 20% opacity hex
+                display: 'flex', alignItems: 'center', justifyContent: 'center'
             }}>
                 {iconWithColor}
             </div>

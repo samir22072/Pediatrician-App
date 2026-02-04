@@ -19,7 +19,7 @@ export default function Home() {
 
   const fetchPatients = async () => {
     try {
-      const res = await api.get('patients/');
+      const res = await api.post('patients/list/');
       setPatients(res.data);
     } catch (err) {
       console.error("Fetch Patients Failed", err);
@@ -29,7 +29,7 @@ export default function Home() {
   // Handlers
   const handleNewPatient = async (data: any) => {
     try {
-      const res = await api.post('patients/', data);
+      const res = await api.post('patients/create/', data);
       // Navigate to the new patient's details page
       router.push(`/patients/${res.data.id}`);
     } catch (err) {

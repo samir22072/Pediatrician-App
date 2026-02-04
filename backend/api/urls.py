@@ -1,16 +1,18 @@
 from django.urls import path, include
-from rest_framework.routers import DefaultRouter
-from .views import PatientViewSet, VisitViewSet, AttachmentViewSet, DashboardView
-from .ai_views import AIChatView, AISummarizeView
-
-router = DefaultRouter()
-router.register(r'patients', PatientViewSet)
-router.register(r'visits', VisitViewSet)
-router.register(r'attachments', AttachmentViewSet)
+from .views import (
+    PatientListView, PatientCreateView, PatientDetailView,
+    VisitCreateView, VisitUpdateView, DashboardView,
+    AIChatView, AISummarizeView, AIHistorySummaryView
+)
 
 urlpatterns = [
-    path('', include(router.urls)),
+    path('patients/list/', PatientListView.as_view(), name='patient-list'),
+    path('patients/create/', PatientCreateView.as_view(), name='patient-create'),
+    path('patients/detail/', PatientDetailView.as_view(), name='patient-detail'),
+    path('visits/create/', VisitCreateView.as_view(), name='visit-create'),
+    path('visits/update/', VisitUpdateView.as_view(), name='visit-update'),
     path('dashboard/', DashboardView.as_view(), name='dashboard'),
     path('ai/chat/', AIChatView.as_view(), name='ai-chat'),
     path('ai/summarize/', AISummarizeView.as_view(), name='ai-summarize'),
+    path('ai/history-summary/', AIHistorySummaryView.as_view(), name='ai-history-summary'),
 ]

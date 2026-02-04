@@ -18,7 +18,7 @@ export default function InputForm({ onCancel, onSubmit, mode = 'new-patient', in
         fatherHeight: initialData?.father_height || '',
         motherHeight: initialData?.mother_height || '',
         visitDate: initialData?.date || new Date().toISOString().split('T')[0],
-        age: initialData?.age || '', // Keep as float for state/submission
+        age: initialData?.age || '',
         weight: initialData?.weight || '',
         height: initialData?.height || '',
         visitType: initialData?.visitType || ['General'], // Array
@@ -30,7 +30,6 @@ export default function InputForm({ onCancel, onSubmit, mode = 'new-patient', in
 
     const calculateDetailedAge = (dobString: string, dateString: string) => {
         if (!dobString || !dateString) return { display: '', float: 0 };
-
         const dob = new Date(dobString);
         const visitDate = new Date(dateString);
 
@@ -40,17 +39,16 @@ export default function InputForm({ onCancel, onSubmit, mode = 'new-patient', in
 
         if (days < 0) {
             months--;
-            // Days in previous month
-            const prevMonth = new Date(visitDate.getFullYear(), visitDate.getMonth(), 0).getDate();
-            days += prevMonth;
+            const prevMonthDate = new Date(visitDate.getFullYear(), visitDate.getMonth(), 0);
+            days += prevMonthDate.getDate();
         }
         if (months < 0) {
             years--;
             months += 12;
         }
 
-        const totalTime = Math.abs(visitDate.getTime() - dob.getTime());
-        const ageFloat = (totalTime / (1000 * 60 * 60 * 24 * 365.25)).toFixed(2);
+        const diffTime = Math.abs(visitDate.getTime() - dob.getTime());
+        const ageFloat = (diffTime / (1000 * 60 * 60 * 24 * 365.25)).toFixed(2);
 
         return {
             display: `${years}y ${months}m ${days}d`,
@@ -58,21 +56,21 @@ export default function InputForm({ onCancel, onSubmit, mode = 'new-patient', in
         };
     };
 
-    // Auto-update age when date or DOB changes
+    // Derived state for display
+    const ageDetails = ((mode === 'add-visit' || mode === 'edit-visit') && patientDOB)
+        ? calculateDetailedAge(patientDOB, formData.visitDate)
+        : { display: '', float: formData.age };
+
+    // Update internal float age for submission if date changes
     React.useEffect(() => {
         if ((mode === 'add-visit' || mode === 'edit-visit') && patientDOB) {
-            const { display, float } = calculateDetailedAge(patientDOB, formData.visitDate);
-            // We only update the form data if it's different to avoid loops, 
-            // relying on the calculated display for the UI
-            if (formData.age !== float) {
+            const { float } = calculateDetailedAge(patientDOB, formData.visitDate);
+            if (float != formData.age) {
                 setFormData(prev => ({ ...prev, age: float }));
             }
         }
     }, [formData.visitDate, patientDOB, mode]);
 
-    const detailedAge = ((mode === 'add-visit' || mode === 'edit-visit') && patientDOB)
-        ? calculateDetailedAge(patientDOB, formData.visitDate).display
-        : '';
 
     const handleChange = (e: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
         const { name, value } = e.target;
@@ -80,7 +78,6 @@ export default function InputForm({ onCancel, onSubmit, mode = 'new-patient', in
     };
 
     const handleVisitTypeChange = (type: string) => {
-        // ... existing handlers ...
         setFormData(prev => {
             const current = Array.isArray(prev.visitType) ? prev.visitType : [];
             if (current.includes(type)) {
@@ -208,9 +205,8 @@ export default function InputForm({ onCancel, onSubmit, mode = 'new-patient', in
                                         fontWeight: 600,
                                         display: 'flex', alignItems: 'center'
                                     }}>
-                                        {detailedAge || formData.age + ' yrs'}
+                                        {ageDetails.display || formData.age + ' yrs'}
                                     </div>
-                                    {/* Hidden input to ensure value is submitted if needed, though we use formData in handleSubmit */}
                                     <input type="hidden" name="age" value={formData.age} />
                                 </div>
                             </div>
