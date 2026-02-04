@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { MessageCircle, X, Send, Sparkles, Mic, MicOff } from 'lucide-react';
-import api from '@/lib/api';
+import { AIService } from '@/lib/api';
 
 interface Message {
     id: string;
@@ -57,7 +57,7 @@ export default function AIChat({ patientName, patientStats, patientId, onTransfe
                 text: m.text
             }));
 
-            const response = await api.post('ai/chat/', {
+            const response = await AIService.chat({
                 message: userMsg.text,
                 history: history,
                 patientStats: patientStats,
@@ -92,7 +92,7 @@ export default function AIChat({ patientName, patientStats, patientId, onTransfe
                 text: m.text
             }));
 
-            const response = await api.post('ai/summarize/', {
+            const response = await AIService.summarize({
                 history: history,
                 patientId: patientId
             });
@@ -183,53 +183,32 @@ export default function AIChat({ patientName, patientStats, patientId, onTransfe
 
     // Render Clean Embedded View
     return (
-        <div style={{
-            height: '100%',
-            display: 'flex', flexDirection: 'column',
-            backgroundColor: 'rgba(5, 5, 20, 0.4)',
-            borderRadius: '1rem',
-            border: '1px solid var(--glass-border)',
-            overflow: 'hidden'
-        }}>
-            {/* Header - Simplified for Tab View */}
-            <div style={{
-                padding: '1rem', borderBottom: '1px solid var(--glass-border)',
-                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                background: 'linear-gradient(90deg, rgba(14, 165, 233, 0.1), transparent)'
-            }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                    <div style={{ padding: '0.5rem', borderRadius: '50%', backgroundColor: 'rgba(14, 165, 233, 0.2)' }}>
+        <div className="chat-container">
+            {/* Header */}
+            <div className="chat-header">
+                <div className="flex-center gap-3">
+                    <div className="flex-center" style={{ width: '36px', height: '36px', borderRadius: '50%', backgroundColor: 'rgba(14, 165, 233, 0.2)' }}>
                         <Sparkles size={20} color="hsl(var(--primary))" />
                     </div>
                     <div>
-                        <h3 style={{ margin: 0, fontSize: '1rem', color: 'hsl(var(--text-primary))' }}>AI Triage Session</h3>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                        <h3 className="text-primary font-semibold m-0" style={{ fontSize: '1rem' }}>AI Triage Session</h3>
+                        <div className="flex-center gap-1 justify-start">
                             <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: 'hsl(var(--success))' }}></span>
-                            <span style={{ fontSize: '0.75rem', color: 'hsl(var(--text-secondary))' }}>Connected to Knowledge Base</span>
+                            <span className="text-secondary text-xs">Connected to Knowledge Base</span>
                         </div>
                     </div>
                 </div>
             </div>
 
             {/* Messages Area */}
-            <div style={{ flex: 1, overflowY: 'auto', padding: '1rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            <div className="chat-messages">
                 {messages.map(msg => (
-                    <div key={msg.id} style={{
-                        alignSelf: msg.sender === 'user' ? 'flex-end' : 'flex-start',
-                        maxWidth: '70%',
-                        padding: '1rem 1.25rem',
-                        borderRadius: msg.sender === 'user' ? '1rem 1rem 0 1rem' : '1rem 1rem 1rem 0',
-                        backgroundColor: msg.sender === 'user' ? 'hsl(var(--primary))' : 'rgba(255,255,255,0.05)',
-                        color: msg.sender === 'user' ? 'black' : 'hsl(var(--text-primary))',
-                        fontSize: '0.95rem',
-                        boxShadow: msg.sender === 'user' ? '0 2px 10px rgba(14, 165, 233, 0.2)' : 'none',
-                        lineHeight: '1.5'
-                    }}>
+                    <div key={msg.id} className={`chat-bubble ${msg.sender}`}>
                         {msg.text}
                     </div>
                 ))}
                 {isTyping && (
-                    <div style={{ alignSelf: 'flex-start', padding: '0.5rem 1rem', fontSize: '0.8rem', color: 'hsl(var(--text-secondary))', fontStyle: 'italic', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <div style={{ alignSelf: 'flex-start' }} className="flex-center gap-2 text-secondary text-sm italic p-2">
                         <Sparkles size={12} className="animate-spin-slow" />
                         AI is analyzing...
                     </div>
@@ -238,17 +217,15 @@ export default function AIChat({ patientName, patientStats, patientId, onTransfe
             </div>
 
             {/* Action Bar */}
-            <div style={{ padding: '1.5rem', borderTop: '1px solid var(--glass-border)', backgroundColor: 'rgba(0,0,0,0.2)' }}>
+            <div className="chat-actions">
                 {messages.length > 2 && (
                     <button
                         onClick={handleGenerateSummary}
-                        className="btn hover-scale"
+                        className="btn hover-scale w-full flex-center gap-2 mb-4"
                         disabled={isTyping}
                         style={{
-                            width: '100%', marginBottom: '1rem',
                             backgroundColor: 'rgba(16, 185, 129, 0.1)', color: 'hsl(var(--success))',
-                            border: '1px solid rgba(16, 185, 129, 0.3)', justifyContent: 'center',
-                            padding: '0.75rem', fontSize: '0.9rem'
+                            border: '1px solid rgba(16, 185, 129, 0.3)'
                         }}
                     >
                         <Sparkles size={16} />
@@ -256,20 +233,11 @@ export default function AIChat({ patientName, patientStats, patientId, onTransfe
                     </button>
                 )}
 
-                <div style={{ display: 'flex', gap: '1rem' }}>
+                <div className="flex-row gap-4">
                     <button
                         onClick={toggleListening}
                         disabled={isTyping}
-                        style={{
-                            width: '54px', height: '54px', borderRadius: '50%',
-                            backgroundColor: isListening ? 'hsl(var(--destructive))' : 'rgba(255,255,255,0.1)',
-                            color: 'white',
-                            border: isListening ? '2px solid hsl(var(--destructive))' : 'none',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            cursor: 'pointer',
-                            transition: 'all 0.2s',
-                            animation: isListening ? 'pulse-red 1.5s infinite' : 'none'
-                        }}
+                        className={`mic-btn ${isListening ? 'active' : 'inactive'}`}
                         title={isListening ? "Stop Listening" : "Start Voice Input"}
                     >
                         {isListening ? <MicOff size={22} /> : <Mic size={22} />}
@@ -282,21 +250,17 @@ export default function AIChat({ patientName, patientStats, patientId, onTransfe
                         onKeyDown={(e) => e.key === 'Enter' && !isTyping && handleSend()}
                         placeholder={isListening ? "Listening..." : (isTyping ? "Please wait..." : "Type or speak symptoms...")}
                         disabled={isTyping}
-                        style={{
-                            flex: 1, padding: '1rem 1.5rem', borderRadius: '2rem',
-                            backgroundColor: 'rgba(255,255,255,0.05)', border: '1px solid var(--glass-border)',
-                            color: 'white', outline: 'none', fontSize: '1rem'
-                        }}
+                        className="chat-input"
                     />
                     <button
                         onClick={handleSend}
                         disabled={!inputValue.trim() || isTyping}
+                        className="flex-center"
                         style={{
                             width: '54px', height: '54px', borderRadius: '50%',
                             backgroundColor: inputValue.trim() ? 'hsl(var(--primary))' : 'rgba(255,255,255,0.1)',
                             color: inputValue.trim() ? 'black' : 'rgba(255,255,255,0.3)',
-                            border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            cursor: inputValue.trim() ? 'pointer' : 'default',
+                            border: 'none', cursor: inputValue.trim() ? 'pointer' : 'default',
                             transition: 'all 0.2s'
                         }}
                     >

@@ -1,18 +1,15 @@
-'use client';
-
 import React, { useState, useEffect } from 'react';
-import { useParams, useRouter } from 'next/navigation';
-import api from '@/lib/api';
+import { PatientService, VisitService } from '@/lib/api';
 import { Patient, Visit } from '@/lib/types';
 import PatientDetails from '@/components/PatientDetails';
 import InputForm from '@/components/InputForm';
-import AIChat from '@/components/AIChat';
 
-export default function PatientDetailsPage() {
-    const params = useParams();
-    const router = useRouter();
-    const { id } = params;
+interface PatientDetailsPageProps {
+    patientId: string;
+    onBack: () => void;
+}
 
+export default function PatientDetailsPage({ patientId, onBack }: PatientDetailsPageProps) {
     const [patient, setPatient] = useState<Patient | null>(null);
     const [view, setView] = useState<'DETAILS' | 'ADD_VISIT' | 'EDIT_VISIT'>('DETAILS');
     const [editingVisit, setEditingVisit] = useState<Visit | null>(null);
@@ -20,17 +17,17 @@ export default function PatientDetailsPage() {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        if (id) fetchPatientDetails(id as string);
-    }, [id]);
+        if (patientId) fetchPatientDetails(patientId);
+    }, [patientId]);
 
-    const fetchPatientDetails = async (patientId: string) => {
+    const fetchPatientDetails = async (id: string) => {
         try {
             setLoading(true);
-            const res = await api.post('patients/detail/', { id: patientId });
+            const res = await PatientService.detail(id);
             setPatient(res.data);
         } catch (err) {
             console.error("Failed to fetch patient", err);
-            router.push('/');
+            onBack();
         } finally {
             setLoading(false);
         }
@@ -38,8 +35,8 @@ export default function PatientDetailsPage() {
 
     const handleAddVisit = async (data: any) => {
         try {
-            await api.post('visits/create/', { ...data, patient: id });
-            await fetchPatientDetails(id as string);
+            await VisitService.create({ ...data, patient: patientId });
+            await fetchPatientDetails(patientId);
             setView('DETAILS');
         } catch (err) {
             alert("Failed to add visit");
@@ -49,8 +46,8 @@ export default function PatientDetailsPage() {
     const handleEditVisit = async (data: any) => {
         if (!editingVisit) return;
         try {
-            await api.post('visits/update/', { ...data, id: editingVisit.id });
-            await fetchPatientDetails(id as string);
+            await VisitService.update({ ...data, id: editingVisit.id });
+            await fetchPatientDetails(patientId);
             setEditingVisit(null);
             setView('DETAILS');
         } catch (err) {
@@ -58,7 +55,7 @@ export default function PatientDetailsPage() {
         }
     };
 
-    if (loading) return <div style={{ padding: '2rem', color: 'hsl(var(--text-secondary))' }}>Loading patient data...</div>;
+    if (loading) return <div style={{ padding: '2rem', color: 'hsl(var(--text-secondary))', textAlign: 'center' }}>Loading patient data...</div>;
     if (!patient) return null;
 
     const Modal = ({ children, onClose }: { children: React.ReactNode, onClose: () => void }) => (
@@ -79,10 +76,10 @@ export default function PatientDetailsPage() {
     );
 
     return (
-        <div className="container" style={{ position: 'relative' }}>
+        <div style={{ position: 'relative' }}>
             <PatientDetails
                 patient={patient}
-                onBack={() => router.push('/')}
+                onBack={onBack}
                 onAddVisit={() => setView('ADD_VISIT')}
                 onEditVisit={(v) => { setEditingVisit(v); setView('EDIT_VISIT'); }}
                 onTransferToVisit={(summary) => {
@@ -111,8 +108,6 @@ export default function PatientDetailsPage() {
                                 return (diff / (1000 * 60 * 60 * 24 * 365.25)).toFixed(2);
                             })() : ''
                         })}
-
-
                         patientDOB={patient.dob}
                     />
                 </Modal>
@@ -133,8 +128,6 @@ export default function PatientDetailsPage() {
                     />
                 </Modal>
             )}
-
-
         </div>
     );
 }

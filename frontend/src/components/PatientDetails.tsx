@@ -53,48 +53,43 @@ export default function PatientDetails({ patient, onBack, onAddVisit, onEditVisi
     };
 
     return (
-        <div className="animate-fade-in" style={{ height: 'calc(100vh - 80px)', display: 'flex', flexDirection: 'column' }}>
+        <div className="animate-fade-in flex-col" style={{ height: 'calc(100vh - 80px)' }}>
             <NavbarActions>
-                <button onClick={onBack} className="btn" style={{
+                <button onClick={onBack} className="btn gap-2" style={{
                     backgroundColor: 'transparent',
                     color: 'hsl(var(--text-secondary))',
                     marginRight: 'auto',
                     border: '1px solid var(--glass-border)',
-                    fontSize: '0.85rem'
                 }}>
                     <ArrowLeft size={16} /> Back
                 </button>
-                <button onClick={onAddVisit} className="btn btn-primary" style={{ fontSize: '0.85rem' }}>
+                <button onClick={onAddVisit} className="btn btn-primary gap-2">
                     <Plus size={16} /> Add Visit
                 </button>
             </NavbarActions>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '300px 1fr', gap: '2rem', flex: 1, minHeight: 0 }}>
+            <div className="patient-layout">
 
                 {/* Left Sidebar: Patient Profile */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                <div className="flex-col gap-6">
 
                     {/* Identity Card */}
-                    <div className="card" style={{ padding: '2rem 1.5rem', textAlign: 'center', position: 'relative', overflow: 'hidden' }}>
-                        <div style={{
-                            width: '80px', height: '80px', borderRadius: '50%', margin: '0 auto 1rem',
-                            backgroundColor: 'rgba(14, 165, 233, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            border: '2px solid hsl(var(--primary))', boxShadow: '0 0 20px rgba(14, 165, 233, 0.3)'
-                        }}>
-                            <span style={{ fontSize: '2rem', fontWeight: 'bold', color: 'hsl(var(--primary))' }}>
+                    <div className="card text-center relative overflow-hidden">
+                        <div className="avatar-lg">
+                            <span className="text-xl font-bold" style={{ color: 'hsl(var(--primary))', fontSize: '2rem' }}>
                                 {patient.name.charAt(0)}
                             </span>
                         </div>
-                        <h2 style={{ margin: 0, fontSize: '1.5rem' }}>{patient.name}</h2>
-                        <div style={{ fontSize: '0.9rem', color: 'hsl(var(--text-secondary))', marginTop: '0.5rem' }}>
+                        <h2 className="text-lg font-bold" style={{ fontSize: '1.5rem', margin: 0 }}>{patient.name}</h2>
+                        <div className="text-sm text-secondary" style={{ marginTop: '0.5rem' }}>
                             {patient.gender} • {patient.dob}
                         </div>
 
                         {/* Vitals Grid (Merged) */}
-                        <div style={{ marginTop: '2rem', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', textAlign: 'left' }}>
+                        <div className="grid-2-col text-left" style={{ marginTop: '2rem' }}>
                             <div style={{ gridColumn: '1 / -1', paddingBottom: '1rem', borderBottom: '1px solid var(--glass-border)', marginBottom: '0.5rem' }}>
-                                <div className="label" style={{ fontSize: '0.8rem', color: 'hsl(var(--text-secondary))' }}>Current Age</div>
-                                <div style={{ fontSize: '1.5rem', fontWeight: 700, color: 'white' }}>
+                                <div className="label">Current Age</div>
+                                <div className="font-bold text-lg" style={{ fontSize: '1.5rem', color: 'white' }}>
                                     {calculateAge(patient.dob)}
                                 </div>
                             </div>
@@ -102,20 +97,20 @@ export default function PatientDetails({ patient, onBack, onAddVisit, onEditVisi
                             {lastVisit ? (
                                 <>
                                     <div>
-                                        <div className="label" style={{ fontSize: '0.8rem', color: 'hsl(var(--text-secondary))' }}>Weight</div>
-                                        <div style={{ fontSize: '1.2rem', fontWeight: 600, color: 'hsl(var(--primary))' }}>
+                                        <div className="label">Weight</div>
+                                        <div className="font-semibold text-lg" style={{ color: 'hsl(var(--primary))' }}>
                                             {lastVisit.weight} kg
                                         </div>
                                     </div>
                                     <div>
-                                        <div className="label" style={{ fontSize: '0.8rem', color: 'hsl(var(--text-secondary))' }}>Height</div>
-                                        <div style={{ fontSize: '1.2rem', fontWeight: 600, color: 'hsl(var(--success))' }}>
+                                        <div className="label">Height</div>
+                                        <div className="font-semibold text-lg" style={{ color: 'hsl(var(--success))' }}>
                                             {lastVisit.height} cm
                                         </div>
                                     </div>
                                 </>
                             ) : (
-                                <div style={{ gridColumn: '1 / -1', fontSize: '0.9rem', fontStyle: 'italic', color: 'hsl(var(--text-secondary))' }}>
+                                <div className="text-secondary text-sm italic" style={{ gridColumn: '1 / -1' }}>
                                     No vitals recorded
                                 </div>
                             )}
@@ -124,12 +119,12 @@ export default function PatientDetails({ patient, onBack, onAddVisit, onEditVisi
                 </div>
 
                 {/* Right Panel: Tabs & Content */}
-                <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+                <div className="flex-col" style={{ minHeight: 0 }}>
 
                     {/* Tab Navigation */}
-                    <div style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem', borderBottom: '1px solid var(--glass-border)' }}>
+                    <div className="flex-row gap-4 mb-6" style={{ borderBottom: '1px solid var(--glass-border)' }}>
                         {[
-                            { id: 'ai_triage', label: 'AI Triage', icon: <div style={{ fontSize: '1.2em' }}>✨</div> }, // Using emoji as quick icon, otherwise import Sparkles
+                            { id: 'ai_triage', label: 'AI Triage', icon: <div style={{ fontSize: '1.2em' }}>✨</div> },
                             { id: 'charts', label: 'Growth Charts', icon: <Activity size={18} /> },
                             { id: 'vaccinations', label: 'Vaccinations', icon: <Syringe size={18} /> },
                             { id: 'history', label: 'Visit History', icon: <ClipboardList size={18} /> }
@@ -137,18 +132,7 @@ export default function PatientDetails({ patient, onBack, onAddVisit, onEditVisi
                             <button
                                 key={tab.id}
                                 onClick={() => setActiveTab(tab.id as Tab)}
-                                style={{
-                                    padding: '0.75rem 1.5rem',
-                                    background: 'transparent',
-                                    border: 'none',
-                                    borderBottom: activeTab === tab.id ? '2px solid hsl(var(--primary))' : '2px solid transparent',
-                                    color: activeTab === tab.id ? 'hsl(var(--primary))' : 'hsl(var(--text-secondary))',
-                                    fontWeight: 600,
-                                    cursor: 'pointer',
-                                    display: 'flex', alignItems: 'center', gap: '0.5rem',
-                                    transition: 'all 0.2s',
-                                    fontSize: '0.95rem'
-                                }}
+                                className={`tab-btn ${activeTab === tab.id ? 'active' : ''}`}
                             >
                                 {tab.icon}
                                 {tab.label}
@@ -159,7 +143,7 @@ export default function PatientDetails({ patient, onBack, onAddVisit, onEditVisi
                     {/* Scrollable Content Area */}
                     <div style={{ flex: 1, overflowY: 'auto' }}>
                         {activeTab === 'ai_triage' && (
-                            <div className="animate-fade-in" style={{ height: '100%' }}>
+                            <div className="animate-fade-in h-full">
                                 <AIChat
                                     patientName={patient.name}
                                     patientId={String(patient.id)}
@@ -184,16 +168,16 @@ export default function PatientDetails({ patient, onBack, onAddVisit, onEditVisi
                         {activeTab === 'history' && (
                             <div className="animate-fade-in">
                                 {visits.length === 0 ? (
-                                    <div className="card" style={{ padding: '3rem', textAlign: 'center', color: 'hsl(var(--text-secondary))' }}>
+                                    <div className="card text-center text-secondary" style={{ padding: '3rem' }}>
                                         <p>No visits recorded yet.</p>
                                     </div>
                                 ) : (
-                                    <div style={{ display: 'grid', gap: '1rem' }}>
+                                    <div className="flex-col gap-4">
                                         {[...visits].reverse().map(visit => (
-                                            <div key={visit.id} className="card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                            <div key={visit.id} className="card flex-between">
                                                 <div>
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '0.5rem' }}>
-                                                        <span style={{ fontWeight: 600, fontSize: '1.1rem', color: 'hsl(var(--text-primary))' }}>{visit.date}</span>
+                                                    <div className="flex-row items-center gap-4 mb-2">
+                                                        <span className="font-semibold text-lg">{visit.date}</span>
                                                         <span style={{
                                                             fontSize: '0.75rem', padding: '0.2rem 0.6rem', borderRadius: '1rem',
                                                             backgroundColor: 'rgba(14, 165, 233, 0.1)', color: 'hsl(var(--primary))', border: '1px solid rgba(14, 165, 233, 0.2)'
@@ -201,7 +185,7 @@ export default function PatientDetails({ patient, onBack, onAddVisit, onEditVisi
                                                             {visit.visit_type}
                                                         </span>
                                                     </div>
-                                                    <div style={{ display: 'flex', gap: '1.5rem', fontSize: '0.9rem', color: 'hsl(var(--text-secondary))' }}>
+                                                    <div className="flex-row gap-6 text-sm text-secondary">
                                                         <span>Wt: {visit.weight} kg</span>
                                                         <span>Ht: {visit.height} cm</span>
                                                         <span>Age: {visit.age} y</span>
@@ -217,9 +201,7 @@ export default function PatientDetails({ patient, onBack, onAddVisit, onEditVisi
                                                         </div>
                                                     )}
                                                 </div>
-                                                <button onClick={() => onEditVisit(visit)} className="btn" style={{
-                                                    padding: '0.5rem', backgroundColor: 'var(--bg-accent)', color: 'white'
-                                                }}>
+                                                <button onClick={() => onEditVisit(visit)} className="btn-icon" style={{ backgroundColor: 'var(--bg-accent)', color: 'white' }}>
                                                     <Edit size={16} />
                                                 </button>
                                             </div>

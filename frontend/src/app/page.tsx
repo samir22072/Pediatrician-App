@@ -2,57 +2,31 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import api from '@/lib/api';
-import { Patient } from '@/lib/types';
-import PatientList from '@/components/PatientList';
-import InputForm from '@/components/InputForm';
+import DashboardPage from '@/components/pages/DashboardPage';
+import PatientDetailsPage from '@/components/pages/PatientDetailsPage';
 
 export default function Home() {
   const router = useRouter();
-  const [view, setView] = useState<'LIST' | 'NEW_PATIENT'>('LIST');
-  const [patients, setPatients] = useState<Patient[]>([]);
+  const [view, setView] = useState<'DASHBOARD'>('DASHBOARD');
+  const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null);
 
-  // Initial Load
   useEffect(() => {
-    fetchPatients();
+    // Clear selection when returning to dashboard to prevent "Forward" button loops
+    sessionStorage.removeItem('selectedPatientId');
   }, []);
 
-  const fetchPatients = async () => {
-    try {
-      const res = await api.post('patients/list/');
-      setPatients(res.data);
-    } catch (err) {
-      console.error("Fetch Patients Failed", err);
-    }
+  const handlePatientSelect = (id: string) => {
+    sessionStorage.setItem('selectedPatientId', id);
+    router.push('/patient');
   };
 
-  // Handlers
-  const handleNewPatient = async (data: any) => {
-    try {
-      const res = await api.post('patients/create/', data);
-      // Navigate to the new patient's details page
-      router.push(`/patients/${res.data.id}`);
-    } catch (err) {
-      alert("Failed to create patient");
-    }
-  };
-
-  // Render
   return (
     <div className="container">
-      {view === 'LIST' && (
-        <PatientList
-          patients={patients}
-          onSelectPatient={(id) => router.push(`/patients/${id}`)}
-          onAddNew={() => setView('NEW_PATIENT')}
-        />
+      {view === 'DASHBOARD' && (
+        <DashboardPage onPatientSelect={handlePatientSelect} />
       )}
 
-      {view === 'NEW_PATIENT' && (
-        <div style={{ maxWidth: '800px', margin: '0 auto' }}>
-          <InputForm mode="new-patient" onSubmit={handleNewPatient} onCancel={() => setView('LIST')} />
-        </div>
-      )}
+
     </div>
   );
 }
