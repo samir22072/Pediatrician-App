@@ -24,6 +24,8 @@ export const AIService = {
     chat: (data: any) => api.post('ai/chat/', data),
     summarize: (data: any) => api.post('ai/summarize/', data),
     historySummary: (data: any) => api.post('ai/history-summary/', data),
+    listSessions: (data: any) => api.post('ai/sessions/list/', data),
+    createSession: (data: any) => api.post('ai/sessions/create/', data),
 };
 
 export default api;

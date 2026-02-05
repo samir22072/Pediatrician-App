@@ -16,7 +16,7 @@ interface AIChatProps {
         height?: string | number;
     };
     patientId: string;
-    onTransfer: (summary: { diagnosis: string; notes: string; vaccines?: string[] }) => void;
+    onTransfer: (summary: { diagnosis: string; notes: string; vaccines?: string[]; weight?: number; height?: number; visitType?: string[] }) => void;
 }
 
 export default function AIChat({ patientName, patientStats, patientId, onTransfer }: AIChatProps) {
@@ -124,7 +124,10 @@ export default function AIChat({ patientName, patientStats, patientId, onTransfe
             const finalSummary = {
                 diagnosis: summaryData.diagnosis || "Pending Evaluation",
                 notes: summaryData.notes || JSON.stringify(summaryData),
-                vaccines: (summaryData as any).given_vaccines || []
+                vaccines: (summaryData as any).given_vaccines || [],
+                weight: (summaryData as any).weight,
+                height: (summaryData as any).height,
+                visitType: (summaryData as any).visit_type || []
             };
 
             onTransfer(finalSummary);

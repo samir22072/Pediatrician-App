@@ -138,17 +138,17 @@ class AIChatView(APIView):
             
             # Construct Message History
             messages = [
-                SystemMessage(content=f"""You are an expert AI Pediatric Triage Assistant. Your role is to gather a complete clinical picture before the doctor review.
-                
-                You MUST actively inquire about the following if not already provided:
-                1. **Vitals**: Ask about fever (temperature), breathing rate, or heart rate if applicable.
-                2. **Feeding**: Ask about recent feeding patterns (decreased appetite, vomiting, fluid intake).
-                3. **Excretion**: Ask about wet diapers (urine output) and stool patterns (diarrhea, constipation).
-                4. **Activity**: Ask about the child's energy level (lethargic, playful, irritable).
+                SystemMessage(content=f"""You are an expert AI Pediatric Triage Assistant. Your goal is to briefly gather key symptoms for the doctor.
+
+                Guidelines:
+                1. **Relevance is Key**: Ask only questions directly related to the reported symptoms. Do NOT follow a rigid checklist for unrelated issues (e.g., don't ask about diapers if the complaint is a scraped knee).
+                2. **Respect Uncertainty**: If the user says "I don't know", "unsure", or doesn't have the info, accept it immediately and move on. Do NOT press for details.
+                3. **Conciseness**: Keep your responses short (max 2 sentences).
+                4. **Pacing**: Ask only 1 question at a time.
                 {missing_prompt}
                 {vaccine_prompt}
 
-                Ask 1-2 questions at a time to avoid overwhelming the parent. Be empathetic but clinical. Do NOT provide medical diagnoses or treatment advice. Just gather the facts.""")
+                Be empathetic but efficient. Do NOT provide medical diagnoses or treatment advice. Just gather the facts.""")
             ]
             
             for msg in history:
@@ -160,10 +160,51 @@ class AIChatView(APIView):
             # Add current user message
             messages.append(HumanMessage(content=current_message))
             
+            # Save User Message to DB
+            if patient_id:
+                from .models import ChatMessage, ChatSession
+                try:
+                    patient_obj = Patient.objects.get(pk=patient_id)
+                    
+                    # Find or convert session
+                    session_id = request.data.get('sessionId')
+                    if session_id:
+                        try:
+                            session = ChatSession.objects.get(pk=session_id)
+                        except ChatSession.DoesNotExist:
+                             # Fallback create
+                             session = ChatSession.objects.create(patient=patient_obj)
+                    else:
+                        # Temporary: If no session ID, try to get the latest one or create new
+                        # For now, let's just use the latest one to keep context, or create if none.
+                        session = ChatSession.objects.filter(patient=patient_obj).order_by('-updated_at').first()
+                        if not session:
+                             session = ChatSession.objects.create(patient=patient_obj)
+
+                    ChatMessage.objects.create(
+                        session=session,
+                        sender='user',
+                        text=current_message
+                    )
+                except Patient.DoesNotExist:
+                    patient_obj = None
+                    session = None
+
             # Invoke Model
             response = chat.invoke(messages)
             
-            return Response({'text': response.content})
+            # Save AI Response to DB
+            if session:
+                ChatMessage.objects.create(
+                    session=session,
+                    sender='ai',
+                    text=response.content
+                )
+            
+            return Response({
+                'text': response.content, 
+                'sessionId': session.id if session else None
+            })
             
         except Exception as e:
             print(f"LangChain Error: {e}")
@@ -187,6 +228,13 @@ class AISummarizeView(APIView):
                 due_date__lte=date.today()
             ).values_list('vaccine_name', flat=True))
         
+        latest_vitals = "None"
+        if patient_id:
+            from .models import Visit
+            last_visit = Visit.objects.filter(patient_id=patient_id).order_by('-date').first()
+            if last_visit:
+                latest_vitals = f"Weight: {last_visit.weight} kg, Height: {last_visit.height} cm"
+        
         # Convert history to a string block for the prompt
         conversation_text = ""
         for msg in history:
@@ -201,32 +249,54 @@ class AISummarizeView(APIView):
                 temperature=0.2 # Lower temperature for factual summary
             )
             
-            # Define Prompt
-            template = f"""
-            Act as a professional pediatrician. Summarize the following intake conversation into a concise clinical note.
-            Also suggest a short 'Diagnosis' or 'Chief Complaint' title.
+            # Define Prompt - Using standard string (not f-string) to avoid escaping issues
+            template = """
+            Act as a medical assistant. Based on the conversation below, generate a JSON summary for a visit record.
             
-            If the parent confirmed that any of the following overdue vaccines were given elsewhere, list their exact names in the 'given_vaccines' array: {pending_vaccines}
+            Context:
+            - Latest recorded Vitals: {latest_vitals}
             
+            Instructions:
+            1. Extract 'diagnosis' (short clinical term).
+            2. Extract 'notes' (detailed summary of symptoms/advice).
+            3. Extract 'weight' and 'height' if mentioned in chat. IF NOT MENTIONED, attempt to use 'Latest recorded Vitals'. If unknown, use null.
+            4. DETERMINE 'visit_type':
+               - "Sick": if symptoms (fever, cough, pain, etc.) are discussed.
+               - "Vaccination": if vaccines are mentioned or administered.
+               - "Growth Check": if only weight/height/feeding is discussed.
+               - "General": if routine checkup or unclear.
+               - Return a LIST of matching tags. Example: ["Sick", "Vaccination"].
+            5. Extract 'given_vaccines' (list of strings) if administered.
+            6. Return ONLY valid JSON. Do not write "json" or backticks.
+
             Conversation:
-            {{conversation}}
+            {conversation_text}
             
-            Return the output in valid JSON format:
-            {{{{
-                "diagnosis": "Subject / Chief Complaint",
-                "notes": "Patient reports...",
-                "given_vaccines": ["Vaccine Name 1", "Vaccine Name 2"]
-            }}}}
+            JSON Structure:
+            {{
+                "diagnosis": "string",
+                "notes": "string",
+                "weight": number or null,
+                "height": number or null,
+                "visit_type": ["Sick", "Vaccination"],
+                "given_vaccines": ["vaccine1"]
+            }}
             Do not include markdown code blocks, just raw JSON.
             """
             
-            prompt = PromptTemplate.from_template(template)
+            prompt = PromptTemplate(
+                template=template,
+                input_variables=["conversation_text", "latest_vitals"]
+            )
             
             # Create Chain: Prompt -> LLM -> String Parser
             chain = prompt | llm | StrOutputParser()
             
             # Run Chain
-            result = chain.invoke({"conversation": conversation_text})
+            result = chain.invoke({
+                "conversation_text": conversation_text,
+                "latest_vitals": latest_vitals
+            })
             
             # Clean result of any markdown if LangChain didn't catch it
             cleaned_result = result.replace('```json', '').replace('```', '').strip()
@@ -291,3 +361,32 @@ class AIHistorySummaryView(APIView):
             print(f"AI History Summary Error: {e}")
             # Fallback instead of 500 to keep UI smooth
             return Response({'summary': "Could not generate AI summary at this time."})
+            
+class ChatSessionListView(APIView):
+    def post(self, request):
+        patient_id = request.data.get('patientId')
+        if not patient_id:
+            return Response({'error': 'Patient ID required'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        from .models import ChatSession
+        sessions = ChatSession.objects.filter(patient_id=patient_id).order_by('-updated_at')
+        data = [{'id': str(s.id), 'name': s.name, 'updated_at': s.updated_at} for s in sessions]
+        return Response(data)
+
+class ChatSessionCreateView(APIView):
+    def post(self, request):
+        patient_id = request.data.get('patientId')
+        name = request.data.get('name', 'New Chat')
+        
+        if not patient_id:
+            return Response({'error': 'Patient ID required'}, status=status.HTTP_400_BAD_REQUEST)
+            
+        from .models import ChatSession
+        
+        try:
+             patient = Patient.objects.get(pk=patient_id)
+        except Patient.DoesNotExist:
+             return Response({'error': 'Patient not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        session = ChatSession.objects.create(patient=patient, name=name)
+        return Response({'id': str(session.id), 'name': session.name, 'created_at': session.created_at}, status=status.HTTP_201_CREATED)

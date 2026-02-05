@@ -173,7 +173,7 @@ export default function PatientDetails({ patient, onBack, onAddVisit, onEditVisi
                                     </div>
                                 ) : (
                                     <div className="flex-col gap-4">
-                                        {[...visits].reverse().map(visit => (
+                                        {[...visits].filter(v => v.visit_type !== 'Initial').reverse().map(visit => (
                                             <div key={visit.id} className="card flex-between">
                                                 <div>
                                                     <div className="flex-row items-center gap-4 mb-2">

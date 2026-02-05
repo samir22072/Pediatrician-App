@@ -3,7 +3,7 @@ from .models import Patient, Visit, Attachment
 
 @admin.register(Patient)
 class PatientAdmin(admin.ModelAdmin):
-    list_display = ('name', 'dob', 'gender', 'created_at')
+    list_display = ('id', 'name', 'dob', 'gender', 'created_at')
     search_fields = ('name',)
 
 @admin.register(Visit)
@@ -24,3 +24,22 @@ class VaccinationAdmin(admin.ModelAdmin):
     list_display = ('patient', 'vaccine_name', 'due_date', 'status', 'given_at')
     list_filter = ('status', 'due_date', 'vaccine_name')
     search_fields = ('patient__name', 'vaccine_name')
+
+from .models import ChatSession, ChatMessage
+
+@admin.register(ChatSession)
+class ChatSessionAdmin(admin.ModelAdmin):
+    list_display = ('id', 'patient', 'name', 'created_at', 'updated_at')
+    list_filter = ('created_at', 'updated_at')
+    search_fields = ('patient__name', 'name')
+    readonly_fields = ('id', 'created_at', 'updated_at')
+
+@admin.register(ChatMessage)
+class ChatMessageAdmin(admin.ModelAdmin):
+    list_display = ('id', 'session', 'sender', 'timestamp', 'short_text')
+    list_filter = ('sender', 'timestamp')
+    search_fields = ('session__patient__name', 'text')
+    readonly_fields = ('timestamp',)
+
+    def short_text(self, obj):
+        return obj.text[:50]

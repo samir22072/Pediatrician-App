@@ -1,6 +1,8 @@
 from django.db import models
+import uuid
 
 class Patient(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=100)
     dob = models.DateField()
     gender = models.CharField(max_length=10, choices=[('Male', 'Male'), ('Female', 'Female')])
@@ -10,6 +12,31 @@ class Patient(models.Model):
 
     def __str__(self):
         return self.name
+
+class ChatSession(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    patient = models.ForeignKey(Patient, related_name='chat_sessions', on_delete=models.CASCADE)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    name = models.CharField(max_length=200, default="New Chat")
+
+    class Meta:
+        ordering = ['-updated_at']
+
+    def __str__(self):
+        return f"{self.patient.name} - {self.name}"
+
+class ChatMessage(models.Model):
+    session = models.ForeignKey(ChatSession, related_name='messages', on_delete=models.CASCADE)
+    sender = models.CharField(max_length=10, choices=[('user', 'User'), ('ai', 'AI')])
+    text = models.TextField()
+    timestamp = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['timestamp']
+
+    def __str__(self):
+        return f"{self.session.id} ({self.sender}): {self.text[:30]}"
 
 class Visit(models.Model):
     patient = models.ForeignKey(Patient, related_name='visits', on_delete=models.CASCADE)

@@ -2,8 +2,10 @@ from django.urls import path, include
 from .views import (
     PatientListView, PatientCreateView, PatientDetailView,
     VisitCreateView, VisitUpdateView, DashboardView,
-    AIChatView, AISummarizeView, AIHistorySummaryView
+    AIChatView, AISummarizeView, AIHistorySummaryView,
+    ChatSessionListView, ChatSessionCreateView
 )
+
 
 urlpatterns = [
     path('patients/list/', PatientListView.as_view(), name='patient-list'),
@@ -15,4 +17,6 @@ urlpatterns = [
     path('ai/chat/', AIChatView.as_view(), name='ai-chat'),
     path('ai/summarize/', AISummarizeView.as_view(), name='ai-summarize'),
     path('ai/history-summary/', AIHistorySummaryView.as_view(), name='ai-history-summary'),
+    path('ai/sessions/list/', ChatSessionListView.as_view(), name='chat-session-list'),
+    path('ai/sessions/create/', ChatSessionCreateView.as_view(), name='chat-session-create'),
 ]
