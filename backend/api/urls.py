@@ -3,8 +3,9 @@ from .views import (
     PatientListView, PatientCreateView, PatientDetailView,
     VisitCreateView, VisitUpdateView, DashboardView,
     AIChatView, AISummarizeView, AIHistorySummaryView,
-    ChatSessionListView, ChatSessionCreateView
+    ChatSessionListView, ChatSessionCreateView, ChatSessionMessagesView, ChatSessionDeleteView
 )
+
 
 
 urlpatterns = [
@@ -19,4 +20,6 @@ urlpatterns = [
     path('ai/history-summary/', AIHistorySummaryView.as_view(), name='ai-history-summary'),
     path('ai/sessions/list/', ChatSessionListView.as_view(), name='chat-session-list'),
     path('ai/sessions/create/', ChatSessionCreateView.as_view(), name='chat-session-create'),
+    path('ai/sessions/messages/', ChatSessionMessagesView.as_view(), name='chat-session-messages'),
+    path('ai/sessions/delete/', ChatSessionDeleteView.as_view(), name='chat-session-delete'),
 ]

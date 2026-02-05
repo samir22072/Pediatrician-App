@@ -373,6 +373,49 @@ class ChatSessionListView(APIView):
         data = [{'id': str(s.id), 'name': s.name, 'updated_at': s.updated_at} for s in sessions]
         return Response(data)
 
+class ChatSessionMessagesView(APIView):
+    def post(self, request):
+        session_id = request.data.get('sessionId')
+        if not session_id:
+            return Response({'error': 'Session ID required'}, status=status.HTTP_400_BAD_REQUEST)
+            
+        from .models import ChatMessage
+        messages = ChatMessage.objects.filter(session_id=session_id).order_by('timestamp')
+        data = [{'id': str(m.id), 'sender': m.sender, 'text': m.text, 'timestamp': m.timestamp} for m in messages]
+        return Response(data)
+
+class ChatSessionCreateView(APIView):
+    def post(self, request):
+        patient_id = request.data.get('patientId')
+        name = request.data.get('name', 'New Chat')
+        
+        if not patient_id:
+            return Response({'error': 'Patient ID required'}, status=status.HTTP_400_BAD_REQUEST)
+            
+        from .models import ChatSession
+        
+        try:
+             patient = Patient.objects.get(pk=patient_id)
+        except Patient.DoesNotExist:
+             return Response({'error': 'Patient not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        session = ChatSession.objects.create(patient=patient, name=name)
+        return Response({'id': str(session.id), 'name': session.name, 'created_at': session.created_at}, status=status.HTTP_201_CREATED)
+
+class ChatSessionDeleteView(APIView):
+    def post(self, request):
+        session_id = request.data.get('sessionId')
+        if not session_id:
+            return Response({'error': 'Session ID required'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        from .models import ChatSession
+        try:
+             session = ChatSession.objects.get(pk=session_id)
+             session.delete()
+             return Response({'message': 'Session deleted'}, status=status.HTTP_200_OK)
+        except ChatSession.DoesNotExist:
+             return Response({'error': 'Session not found'}, status=status.HTTP_404_NOT_FOUND)
+
 class ChatSessionCreateView(APIView):
     def post(self, request):
         patient_id = request.data.get('patientId')
