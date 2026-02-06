@@ -60,7 +60,7 @@ export default function AIChat({ patientName, patientStats, patientId, onTransfe
             const res = await AIService.createSession({ patientId, name: `Chat ${new Date().toLocaleDateString()}` });
             setSessions(prev => [res.data, ...prev]);
             setCurrentSessionId(res.data.id);
-            setMessages([{ id: 'init', sender: 'ai', text: `Hello! I'm your AI App. New session started for ${patientName}.` }]);
+            setMessages([{ id: 'init', sender: 'ai', text: `Hello! I'm your medical assistant bot. What is ${patientName} here for today?` }]);
         } catch (err) {
             console.error("Failed to create session", err);
         }
@@ -79,7 +79,7 @@ export default function AIChat({ patientName, patientStats, patientId, onTransfe
             }));
 
             if (uiMessages.length === 0) {
-                setMessages([{ id: 'init', sender: 'ai', text: `Hello! I'm your AI Triage Assistant. What symptoms is ${patientName} experiencing today?` }]);
+                setMessages([{ id: 'init', sender: 'ai', text: `Hello! I'm your medical assistant bot. What is ${patientName} here for today?` }]);
             } else {
                 setMessages(uiMessages);
             }
@@ -224,172 +224,196 @@ export default function AIChat({ patientName, patientStats, patientId, onTransfe
 
     return (
         <div className="flex-row h-full gap-4 relative" style={{ minHeight: '500px', alignItems: 'flex-start' }}>
-            {/* Sidebar Toggle Button (Mobile/Collapsed) */}
-            {/* Sidebar Toggle Button (Mobile/Collapsed) */}
-            {!isSidebarOpen && (
-                <div className="pt-2 tooltip-container tooltip-right" data-tooltip="Open Sidebar">
-                    <button
-                        onClick={() => setIsSidebarOpen(true)}
-                        className="btn-icon p-2 text-primary"
-                        style={{
-                            backgroundColor: 'var(--glass-bg)',
-                            border: '1px solid var(--glass-border)',
-                            boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
-                        }}
-                    >
-                        <PanelLeft size={20} />
-                    </button>
-                </div>
-            )}
-
-            {/* Sidebar - Sessions */}
-            {isSidebarOpen && (
-                <div className="flex-col gap-2 transition-all" style={{ width: '250px', borderRight: '1px solid var(--glass-border)', paddingRight: '1rem' }}>
-                    {/* Header: Title + Collapse Right */}
-                    <div className="flex-between mb-3 pt-1">
-                        <h3 className="text-secondary text-sm font-semibold">History</h3>
-                        <div className="tooltip-container tooltip-left" data-tooltip="Close Sidebar">
-                            <button
-                                onClick={() => setIsSidebarOpen(false)}
-                                className="btn-icon p-1 hover:text-primary"
-                            >
-                                <PanelLeft size={18} />
-                            </button>
-                        </div>
+            {sessions.length === 0 ? (
+                <div className="w-full h-full flex-center flex-col gap-4">
+                    <div className="p-6 rounded-full" style={{ backgroundColor: 'rgba(14, 165, 233, 0.1)' }}>
+                        <Sparkles size={48} className="text-primary" />
                     </div>
-
-                    {/* New Chat Button */}
+                    <h2 className="text-xl font-semibold text-primary">Start a New Consultation</h2>
+                    <p className="text-secondary text-sm max-w-md text-center mb-4">
+                        Create a new session to begin AI-assisted triage for {patientName}.
+                    </p>
                     <button
                         onClick={handleCreateSession}
-                        className="btn w-full flex-center gap-2 mb-2"
-                        title="Start New Chat"
+                        className="btn flex-center gap-2 px-6 py-3 text-lg hover-scale"
                         style={{
-                            padding: '0.6rem',
-                            fontSize: '0.9rem',
-                            backgroundColor: 'rgba(14, 165, 233, 0.1)',
-                            color: 'hsl(var(--primary))',
-                            border: '1px solid rgba(14, 165, 233, 0.2)'
+                            backgroundColor: 'hsl(var(--primary))',
+                            color: 'white',
+                            boxShadow: '0 4px 14px rgba(14, 165, 233, 0.4)'
                         }}
                     >
-                        <Sparkles size={16} /> <span>New Chat</span>
+                        <Sparkles size={20} /> Start New Chat
                     </button>
-
-                    {/* Previous Chats Heading */}
-                    <div className="text-xs font-bold text-secondary uppercase tracking-wider mb-1 opacity-60 pl-1">
-                        Previous Chats
-                    </div>
-
-                    <div className="flex-col gap-2 overflow-y-auto" style={{ maxHeight: 'calc(100% - 130px)' }}>
-                        {sessions.map(session => (
-                            <div
-                                key={session.id}
-                                onClick={() => selectSession(session.id)}
-                                className={`p-3 rounded-lg cursor-pointer transition-all flex-between ${currentSessionId === session.id ? 'bg-primary text-white shadow-lg' : 'hover:bg-white/5 text-secondary'}`}
-                                style={{ fontSize: '0.9rem' }}
+                </div>
+            ) : (
+                <>
+                    {/* Sidebar Toggle Button (Mobile/Collapsed) */}
+                    {!isSidebarOpen && (
+                        <div className="pt-2 tooltip-container tooltip-right" data-tooltip="Open Sidebar">
+                            <button
+                                onClick={() => setIsSidebarOpen(true)}
+                                className="btn-icon p-2 text-primary"
+                                style={{
+                                    backgroundColor: 'var(--glass-bg)',
+                                    border: '1px solid var(--glass-border)',
+                                    boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
+                                }}
                             >
-                                <div className="font-medium truncate flex-1">{session.name}</div>
+                                <PanelLeft size={20} />
+                            </button>
+                        </div>
+                    )}
+
+                    {/* Sidebar - Sessions */}
+                    {isSidebarOpen && (
+                        <div className="flex-col gap-2 transition-all" style={{ width: '250px', borderRight: '1px solid var(--glass-border)', paddingRight: '1rem' }}>
+                            {/* Header: Title + Collapse Right */}
+                            <div className="flex-between mb-3 pt-1">
+                                <h3 className="text-secondary text-sm font-semibold">History</h3>
+                                <div className="tooltip-container tooltip-left" data-tooltip="Close Sidebar">
+                                    <button
+                                        onClick={() => setIsSidebarOpen(false)}
+                                        className="btn-icon p-1 hover:text-primary"
+                                    >
+                                        <PanelLeft size={18} />
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* New Chat Button */}
+                            <button
+                                onClick={handleCreateSession}
+                                className="btn w-full flex-center gap-2 mb-2"
+                                title="Start New Chat"
+                                style={{
+                                    padding: '0.6rem',
+                                    fontSize: '0.9rem',
+                                    backgroundColor: 'rgba(14, 165, 233, 0.1)',
+                                    color: 'hsl(var(--primary))',
+                                    border: '1px solid rgba(14, 165, 233, 0.2)'
+                                }}
+                            >
+                                <Sparkles size={16} /> <span>New Chat</span>
+                            </button>
+
+                            {/* Previous Chats Heading */}
+                            <div className="text-xs font-bold text-secondary uppercase tracking-wider mb-1 opacity-60 pl-1">
+                                Previous Chats
+                            </div>
+
+                            <div className="flex-col gap-2 overflow-y-auto" style={{ maxHeight: 'calc(100% - 130px)' }}>
+                                {sessions.map(session => (
+                                    <div
+                                        key={session.id}
+                                        onClick={() => selectSession(session.id)}
+                                        className={`p-3 rounded-lg cursor-pointer transition-all flex-between ${currentSessionId === session.id ? 'bg-primary text-white shadow-lg' : 'hover:bg-white/5 text-secondary'}`}
+                                        style={{ fontSize: '0.9rem' }}
+                                    >
+                                        <div className="font-medium truncate flex-1">{session.name}</div>
+                                        <button
+                                            onClick={(e) => handleDeleteSession(e, session.id)}
+                                            className="btn-icon p-1 hover:text-red-400"
+                                            style={{ color: 'inherit', opacity: 0.7 }}
+                                            title="Delete Chat"
+                                        >
+                                            <X size={14} />
+                                        </button>
+                                    </div>
+                                ))}
+                                {sessions.length === 0 && <div className="text-xs text-secondary text-center italic mt-4">No history yet</div>}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Main Chat Area */}
+                    <div className="chat-container flex-1">
+                        {/* Header */}
+                        <div className="chat-header">
+                            <div className="flex-center gap-3">
+                                <div className="flex-center" style={{ width: '36px', height: '36px', borderRadius: '50%', backgroundColor: 'rgba(14, 165, 233, 0.2)' }}>
+                                    <Sparkles size={20} color="hsl(var(--primary))" />
+                                </div>
+                                <div>
+                                    <h3 className="text-primary font-semibold m-0" style={{ fontSize: '1rem' }}>AI Triage Session</h3>
+                                    <div className="flex-center gap-1 justify-start">
+                                        <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: 'hsl(var(--success))' }}></span>
+                                        <span className="text-secondary text-xs">Connected • {sessions.find(s => s.id === currentSessionId)?.name || 'New Session'}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Messages Area */}
+                        <div className="chat-messages">
+                            {messages.map(msg => (
+                                <div key={msg.id} className={`chat-bubble ${msg.sender}`}>
+                                    {msg.text}
+                                </div>
+                            ))}
+                            {isTyping && (
+                                <div style={{ alignSelf: 'flex-start' }} className="flex-center gap-2 text-secondary text-sm italic p-2">
+                                    <Sparkles size={12} className="animate-spin-slow" />
+                                    AI is analyzing...
+                                </div>
+                            )}
+                            <div ref={messagesEndRef} />
+                        </div>
+
+                        {/* Action Bar */}
+                        <div className="chat-actions">
+                            {messages.length > 2 && (
                                 <button
-                                    onClick={(e) => handleDeleteSession(e, session.id)}
-                                    className="btn-icon p-1 hover:text-red-400"
-                                    style={{ color: 'inherit', opacity: 0.7 }}
-                                    title="Delete Chat"
+                                    onClick={handleGenerateSummary}
+                                    className="btn hover-scale w-full flex-center gap-2 mb-4"
+                                    disabled={isTyping}
+                                    style={{
+                                        backgroundColor: 'rgba(16, 185, 129, 0.1)', color: 'hsl(var(--success))',
+                                        border: '1px solid rgba(16, 185, 129, 0.3)'
+                                    }}
                                 >
-                                    <X size={14} />
+                                    <Sparkles size={16} />
+                                    {isTyping ? 'Generating Report...' : 'Summarize & Create Visit Record'}
+                                </button>
+                            )}
+
+                            <div className="flex-row gap-4">
+                                <button
+                                    onClick={toggleListening}
+                                    disabled={isTyping}
+                                    className={`mic-btn ${isListening ? 'active' : 'inactive'}`}
+                                    title={isListening ? "Stop Listening" : "Start Voice Input"}
+                                >
+                                    {isListening ? <MicOff size={22} /> : <Mic size={22} />}
+                                </button>
+
+                                <input
+                                    type="text"
+                                    value={inputValue}
+                                    onChange={(e) => setInputValue(e.target.value)}
+                                    onKeyDown={(e) => e.key === 'Enter' && !isTyping && handleSend()}
+                                    placeholder={isListening ? "Listening..." : (isTyping ? "Please wait..." : "Type or speak symptoms...")}
+                                    disabled={isTyping}
+                                    className="chat-input"
+                                />
+                                <button
+                                    onClick={handleSend}
+                                    disabled={!inputValue.trim() || isTyping}
+                                    className="flex-center"
+                                    style={{
+                                        width: '54px', height: '54px', borderRadius: '50%',
+                                        backgroundColor: inputValue.trim() ? 'hsl(var(--primary))' : 'rgba(255,255,255,0.1)',
+                                        color: inputValue.trim() ? 'black' : 'rgba(255,255,255,0.3)',
+                                        border: 'none', cursor: inputValue.trim() ? 'pointer' : 'default',
+                                        transition: 'all 0.2s'
+                                    }}
+                                >
+                                    <Send size={24} />
                                 </button>
                             </div>
-                        ))}
-                        {sessions.length === 0 && <div className="text-xs text-secondary text-center italic mt-4">No history yet</div>}
+                        </div>
                     </div>
-                </div>
+                </>
             )}
-
-            {/* Main Chat Area */}
-            <div className="chat-container flex-1">
-                {/* Header */}
-                <div className="chat-header">
-                    <div className="flex-center gap-3">
-                        <div className="flex-center" style={{ width: '36px', height: '36px', borderRadius: '50%', backgroundColor: 'rgba(14, 165, 233, 0.2)' }}>
-                            <Sparkles size={20} color="hsl(var(--primary))" />
-                        </div>
-                        <div>
-                            <h3 className="text-primary font-semibold m-0" style={{ fontSize: '1rem' }}>AI Triage Session</h3>
-                            <div className="flex-center gap-1 justify-start">
-                                <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: 'hsl(var(--success))' }}></span>
-                                <span className="text-secondary text-xs">Connected • {sessions.find(s => s.id === currentSessionId)?.name || 'New Session'}</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Messages Area */}
-                <div className="chat-messages">
-                    {messages.map(msg => (
-                        <div key={msg.id} className={`chat-bubble ${msg.sender}`}>
-                            {msg.text}
-                        </div>
-                    ))}
-                    {isTyping && (
-                        <div style={{ alignSelf: 'flex-start' }} className="flex-center gap-2 text-secondary text-sm italic p-2">
-                            <Sparkles size={12} className="animate-spin-slow" />
-                            AI is analyzing...
-                        </div>
-                    )}
-                    <div ref={messagesEndRef} />
-                </div>
-
-                {/* Action Bar */}
-                <div className="chat-actions">
-                    {messages.length > 2 && (
-                        <button
-                            onClick={handleGenerateSummary}
-                            className="btn hover-scale w-full flex-center gap-2 mb-4"
-                            disabled={isTyping}
-                            style={{
-                                backgroundColor: 'rgba(16, 185, 129, 0.1)', color: 'hsl(var(--success))',
-                                border: '1px solid rgba(16, 185, 129, 0.3)'
-                            }}
-                        >
-                            <Sparkles size={16} />
-                            {isTyping ? 'Generating Report...' : 'Summarize & Create Visit Record'}
-                        </button>
-                    )}
-
-                    <div className="flex-row gap-4">
-                        <button
-                            onClick={toggleListening}
-                            disabled={isTyping}
-                            className={`mic-btn ${isListening ? 'active' : 'inactive'}`}
-                            title={isListening ? "Stop Listening" : "Start Voice Input"}
-                        >
-                            {isListening ? <MicOff size={22} /> : <Mic size={22} />}
-                        </button>
-
-                        <input
-                            type="text"
-                            value={inputValue}
-                            onChange={(e) => setInputValue(e.target.value)}
-                            onKeyDown={(e) => e.key === 'Enter' && !isTyping && handleSend()}
-                            placeholder={isListening ? "Listening..." : (isTyping ? "Please wait..." : "Type or speak symptoms...")}
-                            disabled={isTyping}
-                            className="chat-input"
-                        />
-                        <button
-                            onClick={handleSend}
-                            disabled={!inputValue.trim() || isTyping}
-                            className="flex-center"
-                            style={{
-                                width: '54px', height: '54px', borderRadius: '50%',
-                                backgroundColor: inputValue.trim() ? 'hsl(var(--primary))' : 'rgba(255,255,255,0.1)',
-                                color: inputValue.trim() ? 'black' : 'rgba(255,255,255,0.3)',
-                                border: 'none', cursor: inputValue.trim() ? 'pointer' : 'default',
-                                transition: 'all 0.2s'
-                            }}
-                        >
-                            <Send size={24} />
-                        </button>
-                    </div>
-                </div>
-            </div>
         </div>
     );
 }
