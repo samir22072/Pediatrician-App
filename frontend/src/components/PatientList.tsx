@@ -1,6 +1,12 @@
 import React, { useState } from 'react';
 import { User, Plus, ChevronRight, Activity, Search, Users, Baby, ClipboardList, Stethoscope } from 'lucide-react';
 import { Patient } from '@/lib/types';
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Card, CardContent } from "@/components/ui/card"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Badge } from "@/components/ui/badge"
+import { cn } from "@/lib/utils"
 
 interface PatientListProps {
     patients: Patient[];
@@ -28,143 +34,127 @@ export default function PatientList({ patients, onSelectPatient, onAddNew }: Pat
         : '0';
 
     return (
-        <div className="animate-fade-in">
+        <div className="space-y-8 p-6 animate-in fade-in zoom-in-95 duration-500">
             {/* Top Bar */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
-                <div style={{ position: 'relative', width: '300px' }}>
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                <div className="relative w-full sm:w-[350px]">
                     <Search
                         size={18}
-                        style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', color: 'hsl(var(--text-secondary))' }}
+                        className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
                     />
-                    <input
+                    <Input
                         type="text"
                         placeholder="Search patients..."
-                        className="input-field"
-                        style={{ paddingLeft: '2.5rem' }}
+                        className="pl-10 h-10 bg-background"
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                     />
                 </div>
-                <button onClick={onAddNew} className="btn btn-primary">
-                    <Plus size={18} /> New Patient
-                </button>
+                <Button onClick={onAddNew} size="lg" className="w-full sm:w-auto shadow-md">
+                    <Plus size={18} className="mr-2" /> New Patient
+                </Button>
             </div>
 
             {/* Stats Grid */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1.5rem', marginBottom: '2.5rem' }}>
-                <StatsCard icon={<Users size={32} />} label="Total Patients" value={totalPatients} color="var(--primary)" />
-                <StatsCard icon={<ClipboardList size={32} />} label="Total Visits" value={totalVisits} color="var(--success)" />
-                <StatsCard icon={<Baby size={32} />} label="Avg. Age" value={`${avgAge} yrs`} color="var(--warning)" />
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <StatsCard
+                    icon={<Users size={24} className="text-blue-500" />}
+                    label="Total Patients"
+                    value={totalPatients}
+                    className="border-l-4 border-l-blue-500"
+                />
+                <StatsCard
+                    icon={<ClipboardList size={24} className="text-green-500" />}
+                    label="Total Visits"
+                    value={totalVisits}
+                    className="border-l-4 border-l-green-500"
+                />
+                <StatsCard
+                    icon={<Baby size={24} className="text-orange-500" />}
+                    label="Avg. Age"
+                    value={`${avgAge} yrs`}
+                    className="border-l-4 border-l-orange-500"
+                />
             </div>
 
             {/* Grid */}
-            <div style={{ display: 'grid', gap: '1.5rem', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))' }}>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                 {filtered.map(patient => (
-                    <div
+                    <Card
                         key={patient.id}
-                        className="card"
-                        style={{
-                            cursor: 'pointer',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            gap: '1rem',
-                            transition: 'all 0.3s ease',
-                            position: 'relative',
-                            overflow: 'hidden',
-                            padding: '1.5rem'
-                        }}
+                        className="group overflow-hidden cursor-pointer hover:shadow-lg hover:border-primary/50 transition-all duration-300 hover:-translate-y-1"
                         onClick={() => onSelectPatient(patient.id.toString())}
-                        onMouseEnter={(e) => {
-                            e.currentTarget.style.borderColor = 'hsl(var(--primary))';
-                            e.currentTarget.style.boxShadow = '0 0 20px rgba(14, 165, 233, 0.2)';
-                            e.currentTarget.style.transform = 'translateY(-4px)';
-                        }}
-                        onMouseLeave={(e) => {
-                            e.currentTarget.style.borderColor = 'var(--glass-border)';
-                            e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0, 0, 0, 0.1)';
-                            e.currentTarget.style.transform = 'translateY(0)';
-                        }}
                     >
-                        {/* Glowing accent line based on gender */}
-                        <div style={{
-                            position: 'absolute', top: 0, left: 0, width: '4px', height: '100%',
-                            backgroundColor: patient.gender === 'Male' ? 'hsl(var(--primary))' : 'hsl(330, 81%, 60%)', // Blue for Male, Pink for Female
-                            opacity: 0.6
-                        }} />
+                        <div className="absolute top-0 left-0 w-1 h-full bg-muted-foreground/20 group-hover:bg-primary transition-colors" />
 
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingLeft: '0.5rem' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                                <div style={{
-                                    width: '50px', height: '50px', borderRadius: '50%',
-                                    backgroundColor: 'rgba(255, 255, 255, 0.03)', display: 'flex',
-                                    alignItems: 'center', justifyContent: 'center',
-                                    border: '1px solid rgba(255,255,255,0.05)',
-                                    fontSize: '1.2rem', fontWeight: 'bold', color: 'hsl(var(--text-primary))'
-                                }}>
-                                    {patient.name.charAt(0)}
-                                </div>
-                                <div>
-                                    <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 600 }}>{patient.name}</h3>
-                                    <div style={{ fontSize: '0.8rem', color: 'hsl(var(--text-secondary))', marginTop: '0.25rem' }}>
-                                        {patient.gender} • {patient.dob}
+                        <CardContent className="p-5 pl-7 flex flex-col gap-4 h-full">
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-4">
+                                    <Avatar className="h-12 w-12 border-2 border-background shadow-sm">
+                                        <AvatarFallback className={cn(
+                                            "text-lg font-bold",
+                                            patient.gender === 'Male' ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" : "bg-pink-100 text-pink-700 dark:bg-pink-900/30 dark:text-pink-400"
+                                        )}>
+                                            {patient.name.charAt(0)}
+                                        </AvatarFallback>
+                                    </Avatar>
+                                    <div>
+                                        <h3 className="font-semibold text-lg leading-none">{patient.name}</h3>
+                                        <div className="text-sm text-muted-foreground mt-1 flex items-center gap-2">
+                                            <span>{patient.gender}</span>
+                                            <span className="h-1 w-1 rounded-full bg-muted-foreground/50" />
+                                            <span>{patient.dob}</span>
+                                        </div>
                                     </div>
                                 </div>
+                                <ChevronRight className="text-muted-foreground/50 group-hover:text-primary transition-colors" size={20} />
                             </div>
-                            <ChevronRight color="hsl(var(--text-secondary))" size={20} />
-                        </div>
 
-                        <div style={{
-                            marginTop: 'auto', paddingTop: '1rem', borderTop: '1px solid var(--glass-border)',
-                            display: 'flex', justifyContent: 'space-between', paddingLeft: '0.5rem', fontSize: '0.85rem'
-                        }}>
-                            <div>
-                                <span style={{ color: 'hsl(var(--text-secondary))' }}>Last Visit</span>
-                                <div style={{ fontWeight: 600, marginTop: '0.25rem' }}>
-                                    {patient.visits && patient.visits.length > 0
-                                        ? patient.visits[patient.visits.length - 1].date
-                                        : 'Never'}
+                            <div className="mt-auto pt-4 border-t border-border flex justify-between items-end text-sm">
+                                <div>
+                                    <p className="text-muted-foreground text-xs uppercase tracking-wider font-medium">Last Visit</p>
+                                    <p className="font-semibold mt-1">
+                                        {patient.visits && patient.visits.length > 0
+                                            ? patient.visits[patient.visits.length - 1].date
+                                            : 'Never'}
+                                    </p>
+                                </div>
+                                <div className="text-right">
+                                    <p className="text-muted-foreground text-xs uppercase tracking-wider font-medium">Current Age</p>
+                                    <p className="font-semibold mt-1">
+                                        {patient.visits && patient.visits.length > 0
+                                            ? `${patient.visits[patient.visits.length - 1].age} yrs`
+                                            : <span className="text-muted-foreground italic">Newborn</span>}
+                                    </p>
                                 </div>
                             </div>
-                            <div style={{ textAlign: 'right' }}>
-                                <span style={{ color: 'hsl(var(--text-secondary))' }}>Current Age</span>
-                                <div style={{ fontWeight: 600, marginTop: '0.25rem' }}>
-                                    {patient.visits && patient.visits.length > 0
-                                        ? `${patient.visits[patient.visits.length - 1].age} yrs`
-                                        : 'Newborn'}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                        </CardContent>
+                    </Card>
                 ))}
             </div>
 
             {filtered.length === 0 && (
-                <div style={{ textAlign: 'center', padding: '4rem', color: 'hsl(var(--text-secondary))' }}>
-                    <p>No patients found matching criteria.</p>
+                <div className="text-center py-20 bg-muted/20 rounded-lg border border-dashed text-muted-foreground">
+                    <Search className="mx-auto h-12 w-12 opacity-20 mb-4" />
+                    <p className="text-lg">No patients found matching criteria.</p>
                 </div>
             )}
         </div>
     );
 };
 
-function StatsCard({ icon, label, value, color }: { icon: React.ReactNode, label: string, value: string | number, color: string }) {
-    // Helper to inject color into icon clone if needed, but simple wrap works
-    const iconWithColor = React.cloneElement(icon as React.ReactElement<any>, { color });
-
+function StatsCard({ icon, label, value, className }: { icon: React.ReactNode, label: string, value: string | number, className?: string }) {
     return (
-        <div className="card" style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-            <div style={{
-                padding: '1rem', borderRadius: '50%',
-                backgroundColor: 'rgba(255,255,255,0.05)',
-                border: `1px solid ${color}33`, // 20% opacity hex
-                display: 'flex', alignItems: 'center', justifyContent: 'center'
-            }}>
-                {iconWithColor}
-            </div>
-            <div>
-                <div className="label" style={{ marginBottom: 0 }}>{label}</div>
-                <div style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>{value}</div>
-            </div>
-        </div>
+        <Card className={cn("overflow-hidden", className)}>
+            <CardContent className="p-6 flex items-center gap-4">
+                <div className="h-12 w-12 rounded-full bg-background border shadow-sm flex items-center justify-center shrink-0">
+                    {icon}
+                </div>
+                <div>
+                    <p className="text-sm font-medium text-muted-foreground">{label}</p>
+                    <p className="text-2xl font-bold">{value}</p>
+                </div>
+            </CardContent>
+        </Card>
     );
 }

@@ -136,9 +136,27 @@ class AIChatView(APIView):
                     vaccine_list = ", ".join(pending_vaccines)
                     vaccine_prompt = f"\n\n**Vaccination Check**: The patient is due/overdue for the following vaccines: {vaccine_list}. Ask if any of these have been administered recently by another doctor."
             
-            # Construct Message History
-            messages = [
-                SystemMessage(content=f"""You are an expert AI Pediatric Triage Assistant. Your goal is to briefly gather key symptoms for the doctor.
+            # Retrieve mode from request, default to 'patient'
+            mode = request.data.get('mode', 'patient')
+
+            system_prompt_content = ""
+            
+            if mode == 'doctor':
+                 system_prompt_content = f"""You are an efficient AI Medical Scribe assisting a physician.
+                 
+                 Goal: Structure clinical notes from the doctor's input and ask ONLY critical clarifying questions if data is missing for a complete record.
+                 
+                 Guidelines:
+                 1. **Professional Tone**: Use standard medical terminology. Be brief.
+                 2. **No Triage**: Do NOT ask "How long has he had this?" or "Is he eating well?" unless the doctor explicitly asks you to remind them.
+                 3. **Structure**: If the doctor dictates findings (e.g., "Otitis media right ear"), acknowledge simply: "Noted. Right OM."
+                 4. **Assistance**: If the doctor asks for a differential or dosage, provide it concisely.
+                 {missing_prompt}
+                 
+                 Your output should be ready for pasting into an EMR or a brief confirmation of recorded data."""
+            else:
+                # Default "Patient/Parent" Mode
+                system_prompt_content = f"""You are an expert AI Pediatric Triage Assistant. Your goal is to briefly gather key symptoms for the doctor.
 
                 Guidelines:
                 1. **Relevance is Key**: Ask only questions directly related to the reported symptoms. Do NOT follow a rigid checklist for unrelated issues (e.g., don't ask about diapers if the complaint is a scraped knee).
@@ -148,7 +166,11 @@ class AIChatView(APIView):
                 {missing_prompt}
                 {vaccine_prompt}
 
-                Be empathetic but efficient. Do NOT provide medical diagnoses or treatment advice. Just gather the facts.""")
+                Be empathetic but efficient. Do NOT provide medical diagnoses or treatment advice. Just gather the facts."""
+
+            # Construct Message History
+            messages = [
+                SystemMessage(content=system_prompt_content)
             ]
             
             for msg in history:
@@ -193,16 +215,48 @@ class AIChatView(APIView):
             # Invoke Model
             response = chat.invoke(messages)
             
+            # Extract text content safely
+            content = response.content
+            
+            # If content is a string that looks like a JSON list, try to parse it
+            if isinstance(content, str) and content.strip().startswith('['):
+                try:
+                    import json
+                    # Replace single quotes with double quotes for valid JSON if needed (though risky)
+                    # Better to just try loading if it's valid JSON. 
+                    # If it's a python repr string (single quotes), json.loads might fail. 
+                    # Let's try ast.literal_eval for safety if json fails, or just strict json.
+                    # Actually, Gemini might return a string representation of a list.
+                    # Let's try to parse it.
+                    parsed_content = json.loads(content)
+                    if isinstance(parsed_content, list):
+                        content = parsed_content
+                except json.JSONDecodeError:
+                    pass
+
+            if isinstance(content, list):
+                # Handle list of blocks (e.g. [{'type': 'text', 'text': '...'}])
+                text_blocks = [block.get('text', '') for block in content if isinstance(block, dict) and block.get('type') == 'text']
+                if text_blocks:
+                    content = "\n".join(text_blocks)
+                else:
+                    # Fallback: join any string elements
+                    content = " ".join([str(c) for c in content])
+            elif hasattr(content, 'text'):
+                 content = content.text
+            elif not isinstance(content, str):
+                 content = str(content)
+
             # Save AI Response to DB
             if session:
                 ChatMessage.objects.create(
                     session=session,
                     sender='ai',
-                    text=response.content
+                    text=content
                 )
             
             return Response({
-                'text': response.content, 
+                'text': content, 
                 'sessionId': session.id if session else None
             })
             
@@ -369,7 +423,8 @@ class ChatSessionListView(APIView):
             return Response({'error': 'Patient ID required'}, status=status.HTTP_400_BAD_REQUEST)
         
         from .models import ChatSession
-        sessions = ChatSession.objects.filter(patient_id=patient_id).order_by('-updated_at')
+        # Annotate with message count and filter > 0
+        sessions = ChatSession.objects.filter(patient_id=patient_id).annotate(msg_count=Count('messages')).filter(msg_count__gt=0).order_by('-updated_at')
         data = [{'id': str(s.id), 'name': s.name, 'updated_at': s.updated_at} for s in sessions]
         return Response(data)
 

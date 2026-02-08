@@ -39,6 +39,7 @@ class ChatMessage(models.Model):
         return f"{self.session.id} ({self.sender}): {self.text[:30]}"
 
 class Visit(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     patient = models.ForeignKey(Patient, related_name='visits', on_delete=models.CASCADE)
     date = models.DateField()
     age = models.FloatField(help_text="Age in years")
@@ -47,11 +48,22 @@ class Visit(models.Model):
     visit_type = models.CharField(max_length=200, blank=True, null=True) # Increased for multi-tags
     diagnosis = models.TextField(blank=True, null=True)
     notes = models.TextField(blank=True, null=True)
+    
+    # Optional Vitals
+    temperature = models.FloatField(help_text="Temperature in Fahrenheit", blank=True, null=True)
+    blood_pressure = models.CharField(max_length=20, help_text="e.g. 120/80", blank=True, null=True)
+    heart_rate = models.IntegerField(help_text="BPM", blank=True, null=True)
+    head_circumference = models.FloatField(help_text="Head Circumference in cm", blank=True, null=True)
+    
+    # Treatment & Plan
+    prescription = models.TextField(blank=True, null=True)
+    follow_up_date = models.DateField(blank=True, null=True)
 
     def __str__(self):
         return f"{self.patient.name} - {self.date}"
 
 class Vaccination(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     STATUS_CHOICES = [
         ('Pending', 'Pending'),
         ('Given', 'Given'),
@@ -69,6 +81,7 @@ class Vaccination(models.Model):
         return f"{self.patient.name} - {self.vaccine_name}"
 
 class Attachment(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     visit = models.ForeignKey(Visit, related_name='attachments', on_delete=models.CASCADE)
     file = models.FileField(upload_to='attachments/')
     name = models.CharField(max_length=255, blank=True)

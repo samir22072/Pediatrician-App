@@ -42,7 +42,7 @@ export default function Header() {
                     textTransform: 'uppercase',
                     letterSpacing: '1px'
                 }}>
-                    Deep Space Command
+                    pediaTrack
                 </p>
             </div>
 

@@ -1,5 +1,5 @@
 export interface Attachment {
-    id?: number;
+    id?: string;
     file?: string; // URL or base64 for upload
     name: string;
     type?: string;
@@ -8,7 +8,7 @@ export interface Attachment {
 }
 
 export interface Vaccination {
-    id: number;
+    id: string;
     vaccine_name: string;
     due_date: string;
     status: 'Pending' | 'Given' | 'Missed';
@@ -21,12 +21,17 @@ export interface Visit {
     age: number;
     weight: number;
     height: number;
+    head_circumference?: number;
     visit_type: string;
     diagnosis: string;
     notes: string;
     vaccines?: string[]; // Names of vaccines given
     given_vaccines_display?: string[]; // Names for display
     attachments: Attachment[];
+    temperature?: number;
+    blood_pressure?: string;
+    heart_rate?: number;
+    prescription?: string;
 }
 
 export interface Patient {
@@ -42,4 +47,19 @@ export interface Patient {
     calculated_age?: number;
     initial_weight?: number;
     initial_height?: number;
+    initial_head_circumference?: number;
+}
+
+export interface Message {
+    id: string;
+    sender: 'user' | 'ai';
+    text: string;
+    timestamp?: string;
+    structuredData?: any;
+}
+
+export interface Session {
+    id: string;
+    name: string;
+    timestamp: string;
 }

@@ -4,7 +4,7 @@ import Header from '@/components/Header';
 
 export const metadata: Metadata = {
   title: 'Pediatric Growth Tracker',
-  description: 'Deep Space Edition',
+  description: 'pediaTrack',
 };
 
 export default function RootLayout({

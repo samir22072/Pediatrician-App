@@ -36,7 +36,7 @@ export default function DashboardPage({ onPatientSelect }: DashboardPageProps) {
     };
 
     return (
-        <div className="animate-fade-in">
+        <div className="animate-in fade-in zoom-in-95 duration-500 w-full">
             {view === 'LIST' && (
                 <PatientList
                     patients={patients}
@@ -46,7 +46,7 @@ export default function DashboardPage({ onPatientSelect }: DashboardPageProps) {
             )}
 
             {view === 'NEW_PATIENT' && (
-                <div style={{ maxWidth: '800px', margin: '0 auto' }}>
+                <div className="max-w-4xl mx-auto py-8">
                     <InputForm mode="new-patient" onSubmit={handleNewPatient} onCancel={() => setView('LIST')} />
                 </div>
             )}

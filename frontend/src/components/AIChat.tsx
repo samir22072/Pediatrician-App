@@ -1,101 +1,151 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { MessageCircle, X, Send, Sparkles, Mic, MicOff, PanelLeft } from 'lucide-react';
-import { AIService } from '@/lib/api';
+'use client';
 
-interface Message {
-    id: string;
-    sender: 'user' | 'ai';
-    text: string;
-}
+import React, { useState, useEffect, useRef } from 'react';
+import { Send, Mic, MicOff, Paperclip, Loader2, Bot, User, PanelLeft, Plus, MessageSquare, Copy, FileText, Sparkles, Check, Trash2 } from 'lucide-react';
+import { AIService } from '@/lib/api';
+import { Message, Session } from '@/lib/types';
+import { Card } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
+import { ScrollArea } from "@/components/ui/scroll-area"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Badge } from "@/components/ui/badge"
+import { Switch } from "@/components/ui/switch"
+import { Label } from "@/components/ui/label"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { cn } from "@/lib/utils"
 
 interface AIChatProps {
-    patientName: string;
-    patientStats?: {
-        age?: string | number;
-        weight?: string | number;
-        height?: string | number;
-    };
-    patientId: string;
-    onTransfer: (summary: { diagnosis: string; notes: string; vaccines?: string[]; weight?: number; height?: number; visitType?: string[] }) => void;
+    patientName?: string;
+    patientId?: string;
+    patientStats?: any;
+    onTransfer?: (data: any) => void;
 }
 
-export default function AIChat({ patientName, patientStats, patientId, onTransfer }: AIChatProps) {
-    const [isOpen, setIsOpen] = useState(false);
-    const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-    const [sessions, setSessions] = useState<any[]>([]);
-    const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+const MSG_INIT_PATIENT = "Hello! I am your pediatric assistant. I can help assess symptoms, check growth charts, and guide you on when to see a doctor. How can I help today?";
+const MSG_INIT_DOCTOR = "Medical Scribe Mode Active. I will listen to your consultation, transcribe notes, and extract clinical data automatically. Ready to start.";
+
+export default function AIChat({ patientName, patientId, patientStats, onTransfer }: AIChatProps) {
     const [messages, setMessages] = useState<Message[]>([]);
     const [inputValue, setInputValue] = useState('');
     const [isTyping, setIsTyping] = useState(false);
-    const messagesEndRef = useRef<HTMLDivElement>(null);
+    const [isListening, setIsListening] = useState(false);
+    const [sessions, setSessions] = useState<Session[]>([]);
+    const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+    const [showSidebar, setShowSidebar] = useState(true);
+    const [isDoctorMode, setIsDoctorMode] = useState(false); // Toggle State
 
-    const scrollToBottom = () => {
-        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-    };
+    // Voice Recording State
+    const [recordingTime, setRecordingTime] = useState(0);
+    const [maxRecordingTime] = useState(120); // 2 minutes
+    const recognitionRef = useRef<any>(null);
+    const timerRef = useRef<NodeJS.Timeout | null>(null);
 
-    // Initialize: Fetch Sessions
+
+
+    // Auto-scroll ref
+    const scrollRef = useRef<HTMLDivElement>(null);
+
+    // Initial Responsive check
     useEffect(() => {
-        setIsOpen(true);
-        fetchSessions();
-    }, [patientId]);
+        if (window.innerWidth < 768) {
+            setShowSidebar(false);
+        }
+    }, []);
 
-    const fetchSessions = async () => {
+    // Load sessions on mount
+    useEffect(() => {
+        loadSessions();
+        // Check local storage for mode preference? For now default to false
+    }, []);
+
+    // Auto-scroll effect
+    useEffect(() => {
+        if (scrollRef.current) {
+            const scrollElement = scrollRef.current.querySelector('[data-radix-scroll-area-viewport]');
+            if (scrollElement) {
+                scrollElement.scrollTop = scrollElement.scrollHeight;
+            }
+        }
+    }, [messages, isTyping]);
+
+
+    const loadSessions = async () => {
+        if (!patientId) return;
         try {
             const res = await AIService.listSessions({ patientId });
             setSessions(res.data);
 
-            // Auto-select latest if exists, else create new or show empty
+            // If sessions exist, select the most recent one automatically
             if (res.data.length > 0) {
-                selectSession(res.data[0].id);
+                // Do not auto-create. Just select the first one or let user choose? 
+                // User preference: "show previous chats and if nothing is present then just one window"
+                // Let's select the latest one.
+                if (!currentSessionId) selectSession(res.data[0].id);
             } else {
-                handleCreateSession();
+                // No sessions. Prepare "New Chat" state but DO NOT create on backend yet.
+                handleCreateSession(isDoctorMode);
             }
         } catch (err) {
-            console.error("Failed to fetch sessions", err);
+            console.error("Failed to load sessions", err);
         }
     };
 
-    const handleCreateSession = async () => {
-        try {
-            const res = await AIService.createSession({ patientId, name: `Chat ${new Date().toLocaleDateString()}` });
-            setSessions(prev => [res.data, ...prev]);
-            setCurrentSessionId(res.data.id);
-            setMessages([{ id: 'init', sender: 'ai', text: `Hello! I'm your medical assistant bot. What is ${patientName} here for today?` }]);
-        } catch (err) {
-            console.error("Failed to create session", err);
-        }
+    const handleCreateSession = async (doctorMode: boolean) => {
+        // LAZY CREATION: Just reset UI state. Do not call API.
+        setCurrentSessionId(null);
+        const initialText = doctorMode ? MSG_INIT_DOCTOR : MSG_INIT_PATIENT;
+        setMessages([{ id: 'init', sender: 'ai', text: initialText }]);
+        if (window.innerWidth < 768) setShowSidebar(false);
     };
 
-    const selectSession = async (sessionId: string) => {
-        setCurrentSessionId(sessionId);
-        setIsTyping(true);
+    const selectSession = async (id: string) => {
+        setCurrentSessionId(id);
+        if (window.innerWidth < 768) setShowSidebar(false);
         try {
-            const res = await AIService.getSessionMessages({ sessionId });
-            // Convert backend messages to UI format
+            const res = await AIService.getSessionMessages({ sessionId: id });
             const uiMessages: Message[] = res.data.map((m: any) => ({
                 id: m.id,
                 sender: m.sender,
-                text: m.text
+                text: m.text,
+                timestamp: m.timestamp,
+                structuredData: m.structured_data
             }));
 
             if (uiMessages.length === 0) {
-                setMessages([{ id: 'init', sender: 'ai', text: `Hello! I'm your medical assistant bot. What is ${patientName} here for today?` }]);
+                const initialText = isDoctorMode ? MSG_INIT_DOCTOR : MSG_INIT_PATIENT;
+                setMessages([{ id: 'init', sender: 'ai', text: initialText }]);
             } else {
                 setMessages(uiMessages);
             }
         } catch (err) {
-            console.error("Failed to load session", err);
-        } finally {
-            setIsTyping(false);
+            console.error("Load messages failed", err);
         }
     };
 
-    useEffect(() => {
-        scrollToBottom();
-    }, [messages, isOpen]);
+    const toggleMode = (checked: boolean) => {
+        setIsDoctorMode(checked);
+        handleCreateSession(checked);
+    };
 
     const handleSend = async () => {
         if (!inputValue.trim()) return;
+
+        // 1. If no session, create one now (Lazy Create)
+        let activeSessionId = currentSessionId;
+        if (!activeSessionId) {
+            try {
+                const name = isDoctorMode ? 'Medical Scribe Session' : 'New Consultation';
+                const res = await AIService.createSession({ patientId, name });
+                activeSessionId = res.data.id;
+                setCurrentSessionId(activeSessionId);
+                setSessions(prev => [res.data, ...prev]);
+            } catch (err) {
+                console.error("Failed to lazily create session", err);
+                return;
+            }
+        }
 
         const userMsg: Message = { id: Date.now().toString(), sender: 'user', text: inputValue };
         setMessages(prev => [...prev, userMsg]);
@@ -103,317 +153,439 @@ export default function AIChat({ patientName, patientStats, patientId, onTransfe
         setIsTyping(true);
 
         try {
+            // Context building: include local vitals if available
             const history = messages.map(m => ({ role: m.sender, text: m.text }));
 
             const response = await AIService.chat({
                 message: userMsg.text,
-                history: history, // Send full history for context (simplified)
+                history: history,
                 patientStats: patientStats,
                 patientId: patientId,
-                sessionId: currentSessionId // Important: Pass session ID
+                sessionId: activeSessionId, // Use the ensured ID
+                mode: isDoctorMode ? 'doctor' : 'patient'
             });
 
-            const aiText = response.data.text;
-            /* Update session list to show recent activity if needed (optional optimization) */
+            const reply = response.data.text;
+            const structured = response.data.structured_data;
 
-            setMessages(prev => [...prev, {
+            const aiMsg: Message = {
                 id: (Date.now() + 1).toString(),
                 sender: 'ai',
-                text: aiText
-            }]);
-        } catch (error) {
-            console.error("AI Chat Error", error);
-            setMessages(prev => [...prev, {
-                id: (Date.now() + 1).toString(),
-                sender: 'ai',
-                text: "I'm having trouble connecting to the server."
-            }]);
-        } finally {
-            setIsTyping(false);
-        }
-    };
-
-    const handleGenerateSummary = async () => {
-        if (isTyping) return;
-        setIsTyping(true);
-        try {
-            const history = messages.map(m => ({
-                role: m.sender,
-                text: m.text
-            }));
-
-            const response = await AIService.summarize({
-                history: history,
-                patientId: patientId
-            });
-
-            const summaryRaw = response.data.summary;
-            let summaryData = { diagnosis: '', notes: '' };
-
-            if (typeof summaryRaw === 'string') {
-                const jsonMatch = summaryRaw.match(/\{[\s\S]*\}/);
-                const jsonString = jsonMatch ? jsonMatch[0] : summaryRaw;
-                try {
-                    summaryData = JSON.parse(jsonString);
-                } catch (e) {
-                    summaryData = { diagnosis: "Consult Needed", notes: summaryRaw };
-                }
-            } else if (typeof summaryRaw === 'object') {
-                summaryData = summaryRaw;
-            }
-
-            const finalSummary = {
-                diagnosis: summaryData.diagnosis || "Pending Evaluation",
-                notes: summaryData.notes || JSON.stringify(summaryData),
-                vaccines: (summaryData as any).given_vaccines || [],
-                weight: (summaryData as any).weight,
-                height: (summaryData as any).height,
-                visitType: (summaryData as any).visit_type || []
+                text: reply,
+                structuredData: structured
             };
+            setMessages(prev => [...prev, aiMsg]);
 
-            onTransfer(finalSummary);
-        } catch (error) {
-            console.error("Summary Generation Failed", error);
-            alert("Failed to generate summary via AI.");
+        } catch (err) {
+            setMessages(prev => [...prev, { id: Date.now().toString(), sender: 'ai', text: "Sorry, I encountered an error. Please try again." }]);
         } finally {
             setIsTyping(false);
         }
     };
 
-    // Speech Recognition Setup (unchanged)
-    const [isListening, setIsListening] = useState(false);
-    const recognitionRef = useRef<any>(null);
-    useEffect(() => {
+    // --- Voice Logic (Enhanced) ---
+    const toggleListening = () => {
+        if (isListening) {
+            stopListening();
+        } else {
+            startListening();
+        }
+    };
+
+    const startListening = () => {
         if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
             const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
             recognitionRef.current = new SpeechRecognition();
-            recognitionRef.current.continuous = false;
-            recognitionRef.current.interimResults = false;
+            recognitionRef.current.continuous = true;
+            recognitionRef.current.interimResults = true;
             recognitionRef.current.lang = 'en-US';
-            recognitionRef.current.onresult = (event: any) => {
-                const transcript = event.results[0][0].transcript;
-                setInputValue(prev => prev + (prev ? ' ' : '') + transcript);
-                setIsListening(false);
-            };
-            recognitionRef.current.onerror = () => setIsListening(false);
-            recognitionRef.current.onend = () => setIsListening(false);
-        }
-    }, []);
 
+            recognitionRef.current.onstart = () => {
+                setIsListening(true);
+                setRecordingTime(0);
+                // Start Timer
+                timerRef.current = setInterval(() => {
+                    setRecordingTime(prev => {
+                        if (prev >= 119) { // nearly 120
+                            stopListening();
+                            return 120;
+                        }
+                        return prev + 1;
+                    });
+                }, 1000);
+            };
+
+            recognitionRef.current.onresult = (event: any) => {
+                let interimTranscript = '';
+                let finalTranscript = '';
+
+                for (let i = event.resultIndex; i < event.results.length; ++i) {
+                    if (event.results[i].isFinal) {
+                        finalTranscript += event.results[i][0].transcript;
+                    } else {
+                        interimTranscript += event.results[i][0].transcript;
+                    }
+                }
+
+                if (finalTranscript) {
+                    setInputValue(prev => prev + (prev ? ' ' : '') + finalTranscript);
+                }
+            };
+
+            recognitionRef.current.onerror = (event: any) => {
+                console.error("Speech recognition error", event.error);
+                stopListening();
+            };
+
+            recognitionRef.current.onend = () => {
+                if (isListening) stopListening();
+            };
+
+            recognitionRef.current.start();
+        } else {
+            // Fallback / Mock
+            alert("Browser does not support speech recognition. Using mock mode.");
+            setIsListening(true);
+            setTimeout(() => {
+                setInputValue(prev => prev + (prev ? ' ' : '') + (isDoctorMode ? " Patient reports 3 days of fever..." : " My child has a fever..."));
+                setIsListening(false);
+            }, 2000);
+        }
+    };
+
+    const stopListening = () => {
+        if (recognitionRef.current) {
+            recognitionRef.current.stop();
+            recognitionRef.current = null;
+        }
+        if (timerRef.current) {
+            clearInterval(timerRef.current);
+            timerRef.current = null;
+        }
+        setIsListening(false);
+    };
+
+    const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            handleSend();
+        }
+    };
+
+    // --- Delete Session Logic ---
     const handleDeleteSession = async (e: React.MouseEvent, sessionId: string) => {
-        e.stopPropagation();
-        if (!confirm("Delete this chat session?")) return;
+        e.stopPropagation(); // Prevent selection when clicking delete
+        if (!confirm("Are you sure you want to delete this chat session?")) return;
 
         try {
             await AIService.deleteSession({ sessionId });
             setSessions(prev => prev.filter(s => s.id !== sessionId));
+
+            // If deleted session was active, clear it
             if (currentSessionId === sessionId) {
-                setMessages([]);
                 setCurrentSessionId(null);
+                setMessages([]);
+                // Optionally select next available or create new
             }
         } catch (err) {
             console.error("Failed to delete session", err);
         }
     };
 
-    const toggleListening = () => {
-        if (!recognitionRef.current) return alert("Voice not supported");
-        isListening ? recognitionRef.current.stop() : recognitionRef.current.start();
-        setIsListening(!isListening);
+    const handleGenerateReport = async () => {
+        if (!currentSessionId || messages.length === 0) return;
+        setIsTyping(true);
+        try {
+            // Include patientID and history. API expects 'history' as list of {role, text}
+            const history = messages.map(m => ({ role: m.sender, text: m.text }));
+            const res = await AIService.summarize({
+                patientId,
+                history
+            });
+
+            if (res.data.summary) {
+                const reportMsg: Message = {
+                    id: Date.now().toString(),
+                    sender: 'ai',
+                    text: `**Report Generated:**\n\n${res.data.summary}`,
+                    timestamp: new Date().toISOString()
+                };
+                setMessages(prev => [...prev, reportMsg]);
+                // Save to DB? The summarize endpoint doesn't automatically save it to chat history usually.
+                // We might want to save it as a message if we want it to persist.
+                // For now, let's just display it. If the user wants to save, they can copy it.
+            }
+        } catch (err) {
+            console.error("Generate report failed", err);
+        } finally {
+            setIsTyping(false);
+        }
     };
 
     return (
-        <div className="flex-row h-full gap-4 relative" style={{ minHeight: '500px', alignItems: 'flex-start' }}>
-            {sessions.length === 0 ? (
-                <div className="w-full h-full flex-center flex-col gap-4">
-                    <div className="p-6 rounded-full" style={{ backgroundColor: 'rgba(14, 165, 233, 0.1)' }}>
-                        <Sparkles size={48} className="text-primary" />
+        <Card className="flex flex-col h-full border-0 shadow-none sm:border sm:shadow-lg overflow-hidden">
+            {/* Header */}
+            <div className="flex items-center justify-between px-4 py-3 border-b bg-muted/40 shrink-0 h-14">
+                <div className="flex items-center gap-3 overflow-hidden">
+                    <TooltipProvider>
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <Button variant="ghost" size="icon" className="shrink-0" onClick={() => setShowSidebar(!showSidebar)}>
+                                    <PanelLeft size={18} />
+                                </Button>
+                            </TooltipTrigger>
+                            <TooltipContent side="right">
+                                <p>Toggle Sidebar</p>
+                            </TooltipContent>
+                        </Tooltip>
+                    </TooltipProvider>
+
+                    <Avatar className="h-8 w-8 border border-border">
+                        <AvatarImage src="/ai-avatar.png" />
+                        <AvatarFallback className="bg-primary/10 text-primary font-bold">AI</AvatarFallback>
+                    </Avatar>
+
+                    <div className="flex flex-col overflow-hidden">
+                        <span className="font-semibold text-sm truncate flex items-center gap-2">
+                            {isDoctorMode ? 'Medical Scribe' : 'Pediatric Assistant'}
+                            {isDoctorMode && <Badge variant="secondary" className="text-[10px] h-4 px-1 bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300">MD</Badge>}
+                        </span>
+                        {isTyping && <span className="text-[10px] text-muted-foreground animate-pulse">Thinking...</span>}
                     </div>
-                    <h2 className="text-xl font-semibold text-primary">Start a New Consultation</h2>
-                    <p className="text-secondary text-sm max-w-md text-center mb-4">
-                        Create a new session to begin AI-assisted triage for {patientName}.
-                    </p>
-                    <button
-                        onClick={handleCreateSession}
-                        className="btn flex-center gap-2 px-6 py-3 text-lg hover-scale"
-                        style={{
-                            backgroundColor: 'hsl(var(--primary))',
-                            color: 'white',
-                            boxShadow: '0 4px 14px rgba(14, 165, 233, 0.4)'
-                        }}
-                    >
-                        <Sparkles size={20} /> Start New Chat
-                    </button>
                 </div>
-            ) : (
-                <>
-                    {/* Sidebar Toggle Button (Mobile/Collapsed) */}
-                    {!isSidebarOpen && (
-                        <div className="pt-2 tooltip-container tooltip-right" data-tooltip="Open Sidebar">
-                            <button
-                                onClick={() => setIsSidebarOpen(true)}
-                                className="btn-icon p-2 text-primary"
-                                style={{
-                                    backgroundColor: 'var(--glass-bg)',
-                                    border: '1px solid var(--glass-border)',
-                                    boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
-                                }}
-                            >
-                                <PanelLeft size={20} />
-                            </button>
-                        </div>
+
+                <div className="flex items-center gap-1">
+                    {/* Generate Report Button - Visible mostly in Doctor Mode or if content exists */}
+                    {messages.length > 0 && (
+                        <TooltipProvider>
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={handleGenerateReport}
+                                        disabled={isTyping}
+                                        className="h-8 gap-2 text-xs font-semibold sm:text-sm text-primary border-primary/20 hover:bg-primary/5 px-3"
+                                    >
+                                        <FileText size={14} />
+                                        <span className="hidden xs:inline">Generate Visit</span>
+                                        <span className="inline xs:hidden">Report</span>
+                                    </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                    <p>Generate Report Summary</p>
+                                </TooltipContent>
+                            </Tooltip>
+                        </TooltipProvider>
                     )}
 
-                    {/* Sidebar - Sessions */}
-                    {isSidebarOpen && (
-                        <div className="flex-col gap-2 transition-all" style={{ width: '250px', borderRight: '1px solid var(--glass-border)', paddingRight: '1rem' }}>
-                            {/* Header: Title + Collapse Right */}
-                            <div className="flex-between mb-3 pt-1">
-                                <h3 className="text-secondary text-sm font-semibold">History</h3>
-                                <div className="tooltip-container tooltip-left" data-tooltip="Close Sidebar">
-                                    <button
-                                        onClick={() => setIsSidebarOpen(false)}
-                                        className="btn-icon p-1 hover:text-primary"
-                                    >
-                                        <PanelLeft size={18} />
-                                    </button>
+                    <TooltipProvider>
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <div className="flex items-center gap-2 px-2">
+                                    <Label htmlFor="mode-switch" className="text-xs font-medium cursor-pointer hidden sm:inline-block">
+                                        {isDoctorMode ? 'Doctor Mode' : 'Patient Mode'}
+                                    </Label>
+                                    <Switch
+                                        id="mode-switch"
+                                        checked={isDoctorMode}
+                                        onCheckedChange={toggleMode}
+                                    />
                                 </div>
-                            </div>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                                <p>Switch between Patient and Doctor personas</p>
+                            </TooltipContent>
+                        </Tooltip>
+                    </TooltipProvider>
+                </div>
+            </div>
 
-                            {/* New Chat Button */}
-                            <button
-                                onClick={handleCreateSession}
-                                className="btn w-full flex-center gap-2 mb-2"
-                                title="Start New Chat"
-                                style={{
-                                    padding: '0.6rem',
-                                    fontSize: '0.9rem',
-                                    backgroundColor: 'rgba(14, 165, 233, 0.1)',
-                                    color: 'hsl(var(--primary))',
-                                    border: '1px solid rgba(14, 165, 233, 0.2)'
-                                }}
-                            >
-                                <Sparkles size={16} /> <span>New Chat</span>
-                            </button>
-
-                            {/* Previous Chats Heading */}
-                            <div className="text-xs font-bold text-secondary uppercase tracking-wider mb-1 opacity-60 pl-1">
-                                Previous Chats
-                            </div>
-
-                            <div className="flex-col gap-2 overflow-y-auto" style={{ maxHeight: 'calc(100% - 130px)' }}>
-                                {sessions.map(session => (
+            <div className="flex flex-1 min-h-0 overflow-hidden relative">
+                {/* Sidebar */}
+                <div
+                    className={cn(
+                        "absolute md:relative z-20 h-full bg-background border-r transition-all duration-300 ease-in-out flex flex-col shrink-0",
+                        showSidebar ? "w-64 translate-x-0" : "w-0 -translate-x-full md:translate-x-0 md:w-0"
+                    )}
+                >
+                    <div className={cn("p-3 border-b flex justify-between items-center bg-muted/20", !showSidebar && "hidden")}>
+                        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">History</span>
+                        <Button variant="ghost" size="icon" onClick={() => handleCreateSession(isDoctorMode)} className="h-7 w-7">
+                            <Plus size={14} />
+                        </Button>
+                    </div>
+                    <ScrollArea className={cn("flex-1", !showSidebar && "hidden")}>
+                        <div className="p-2 space-y-1">
+                            {sessions.map(s => (
+                                <button
+                                    key={s.id}
+                                    onClick={() => selectSession(s.id)}
+                                    className={cn(
+                                        "group w-full text-left px-3 py-2 rounded-md text-sm transition-colors flex items-center gap-2 truncate",
+                                        currentSessionId === s.id
+                                            ? "bg-primary/10 text-primary font-medium"
+                                            : "hover:bg-muted text-muted-foreground hover:text-foreground"
+                                    )}
+                                >
+                                    <MessageSquare size={14} className="shrink-0 opacity-70" />
+                                    <span className="truncate flex-1">{s.name || "Untitled Chat"}</span>
+                                    {/* Delete Button - visible on hover or if active */}
                                     <div
-                                        key={session.id}
-                                        onClick={() => selectSession(session.id)}
-                                        className={`p-3 rounded-lg cursor-pointer transition-all flex-between ${currentSessionId === session.id ? 'bg-primary text-white shadow-lg' : 'hover:bg-white/5 text-secondary'}`}
-                                        style={{ fontSize: '0.9rem' }}
+                                        role="button"
+                                        onClick={(e) => handleDeleteSession(e, s.id)}
+                                        className={cn(
+                                            "shrink-0 p-1 rounded-md opacity-0 group-hover:opacity-100 hover:bg-destructive/10 hover:text-destructive transition-all",
+                                            currentSessionId === s.id && "opacity-100" // Always show on active
+                                        )}
+                                        title="Delete Session"
                                     >
-                                        <div className="font-medium truncate flex-1">{session.name}</div>
-                                        <button
-                                            onClick={(e) => handleDeleteSession(e, session.id)}
-                                            className="btn-icon p-1 hover:text-red-400"
-                                            style={{ color: 'inherit', opacity: 0.7 }}
-                                            title="Delete Chat"
-                                        >
-                                            <X size={14} />
-                                        </button>
+                                        <Trash2 size={12} />
                                     </div>
-                                ))}
-                                {sessions.length === 0 && <div className="text-xs text-secondary text-center italic mt-4">No history yet</div>}
-                            </div>
+                                </button>
+                            ))}
                         </div>
-                    )}
+                    </ScrollArea>
+                </div>
 
-                    {/* Main Chat Area */}
-                    <div className="chat-container flex-1">
-                        {/* Header */}
-                        <div className="chat-header">
-                            <div className="flex-center gap-3">
-                                <div className="flex-center" style={{ width: '36px', height: '36px', borderRadius: '50%', backgroundColor: 'rgba(14, 165, 233, 0.2)' }}>
-                                    <Sparkles size={20} color="hsl(var(--primary))" />
-                                </div>
-                                <div>
-                                    <h3 className="text-primary font-semibold m-0" style={{ fontSize: '1rem' }}>AI Triage Session</h3>
-                                    <div className="flex-center gap-1 justify-start">
-                                        <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: 'hsl(var(--success))' }}></span>
-                                        <span className="text-secondary text-xs">Connected • {sessions.find(s => s.id === currentSessionId)?.name || 'New Session'}</span>
+                {/* Chat Area */}
+                <div className="flex-1 flex flex-col min-h-0 bg-background/50 relative">
+                    <ScrollArea className="flex-1 p-4" ref={scrollRef}>
+                        <div className="space-y-4 max-w-3xl mx-auto pb-4">
+                            {messages.map((msg) => (
+                                <div
+                                    key={msg.id}
+                                    className={cn(
+                                        "flex gap-3",
+                                        msg.sender === 'user' ? "justify-end" : "justify-start"
+                                    )}
+                                >
+                                    {msg.sender === 'ai' && (
+                                        <Avatar className="h-8 w-8 mt-1 border shadow-sm hidden sm:block">
+                                            <AvatarImage src="/ai-avatar.png" />
+                                            <AvatarFallback className="bg-primary/10 text-primary text-xs">AI</AvatarFallback>
+                                        </Avatar>
+                                    )}
+
+                                    <div
+                                        className={cn(
+                                            "max-w-[85%] sm:max-w-[75%] rounded-2xl px-4 py-3 shadow-sm text-sm leading-relaxed",
+                                            msg.sender === 'user'
+                                                ? "bg-primary text-primary-foreground rounded-tr-none"
+                                                : "bg-muted/80 text-foreground rounded-tl-none border border-border"
+                                        )}
+                                    >
+                                        <div className="whitespace-pre-wrap">{msg.text}</div>
+
+                                        {/* Action Buttons for AI messages */}
+                                        {msg.sender === 'ai' && (
+                                            <div className="flex gap-2 mt-3 pt-2 border-t border-border/50">
+                                                {msg.structuredData && (
+                                                    <Button
+                                                        variant="secondary"
+                                                        size="sm"
+                                                        className="h-7 text-xs gap-1 bg-background/50 hover:bg-background border shadow-none"
+                                                        onClick={() => onTransfer && onTransfer(msg.structuredData)}
+                                                    >
+                                                        <FileText size={12} /> Use Data
+                                                    </Button>
+                                                )}
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                                                    onClick={() => {
+                                                        navigator.clipboard.writeText(msg.text);
+                                                    }}
+                                                >
+                                                    <Copy size={12} />
+                                                </Button>
+                                            </div>
+                                        )}
                                     </div>
-                                </div>
-                            </div>
-                        </div>
 
-                        {/* Messages Area */}
-                        <div className="chat-messages">
-                            {messages.map(msg => (
-                                <div key={msg.id} className={`chat-bubble ${msg.sender}`}>
-                                    {msg.text}
+                                    {msg.sender === 'user' && (
+                                        <Avatar className="h-8 w-8 mt-1 border shadow-sm hidden sm:block">
+                                            <AvatarFallback className="bg-secondary text-secondary-foreground text-xs">Me</AvatarFallback>
+                                        </Avatar>
+                                    )}
                                 </div>
                             ))}
-                            {isTyping && (
-                                <div style={{ alignSelf: 'flex-start' }} className="flex-center gap-2 text-secondary text-sm italic p-2">
-                                    <Sparkles size={12} className="animate-spin-slow" />
-                                    AI is analyzing...
+                            {messages.length === 0 && (
+                                <div className="flex flex-col items-center justify-center h-[50vh] text-muted-foreground opacity-50">
+                                    <Sparkles size={48} className="mb-4" />
+                                    <p>Start a conversation...</p>
                                 </div>
                             )}
-                            <div ref={messagesEndRef} />
                         </div>
+                    </ScrollArea>
 
-                        {/* Action Bar */}
-                        <div className="chat-actions">
-                            {messages.length > 2 && (
-                                <button
-                                    onClick={handleGenerateSummary}
-                                    className="btn hover-scale w-full flex-center gap-2 mb-4"
-                                    disabled={isTyping}
-                                    style={{
-                                        backgroundColor: 'rgba(16, 185, 129, 0.1)', color: 'hsl(var(--success))',
-                                        border: '1px solid rgba(16, 185, 129, 0.3)'
-                                    }}
+                    {/* Input Area */}
+                    <div className="p-4 bg-background border-t">
+                        {isListening && (
+                            <div className="max-w-3xl mx-auto flex items-center gap-3 w-full bg-destructive/10 border border-destructive/20 rounded-md px-4 py-3 animate-pulse mb-2">
+                                <div className="h-3 w-3 rounded-full bg-destructive animate-ping" />
+                                <span className="text-sm font-bold text-destructive flex-1">
+                                    Recording... {Math.floor(recordingTime / 60)}:{String(recordingTime % 60).padStart(2, '0')} / 02:00
+                                </span>
+                                <Button
+                                    onClick={stopListening}
+                                    variant="destructive"
+                                    size="sm"
+                                    className="h-8"
                                 >
-                                    <Sparkles size={16} />
-                                    {isTyping ? 'Generating Report...' : 'Summarize & Create Visit Record'}
-                                </button>
-                            )}
+                                    End Listening
+                                </Button>
+                            </div>
+                        )}
 
-                            <div className="flex-row gap-4">
-                                <button
-                                    onClick={toggleListening}
-                                    disabled={isTyping}
-                                    className={`mic-btn ${isListening ? 'active' : 'inactive'}`}
-                                    title={isListening ? "Stop Listening" : "Start Voice Input"}
-                                >
-                                    {isListening ? <MicOff size={22} /> : <Mic size={22} />}
-                                </button>
+                        <div className="max-w-3xl mx-auto flex gap-2 items-end">
+                            <Button
+                                variant={isListening ? "destructive" : "outline"}
+                                size="icon"
+                                className={cn(
+                                    "h-10 w-10 shrink-0 rounded-full transition-all",
+                                    isListening && "animate-pulse ring-2 ring-destructive/50"
+                                )}
+                                onClick={toggleListening}
+                                disabled={isTyping}
+                            >
+                                {isListening ? <MicOff size={18} /> : <Mic size={18} />}
+                            </Button>
 
-                                <input
-                                    type="text"
+                            <div className="flex-1 relative">
+                                <Textarea
                                     value={inputValue}
                                     onChange={(e) => setInputValue(e.target.value)}
-                                    onKeyDown={(e) => e.key === 'Enter' && !isTyping && handleSend()}
-                                    placeholder={isListening ? "Listening..." : (isTyping ? "Please wait..." : "Type or speak symptoms...")}
+                                    onKeyDown={handleKeyDown}
+                                    placeholder={isListening ? "Listening..." : (isTyping ? "Please wait..." : (isDoctorMode ? "Dictate clinical notes..." : "Type or speak symptoms..."))}
                                     disabled={isTyping}
-                                    className="chat-input"
+                                    className="min-h-[44px] max-h-[120px] resize-none py-3 pr-10 rounded-2xl border-input focus-visible:ring-1 bg-background shadow-sm"
+                                    rows={1}
                                 />
-                                <button
-                                    onClick={handleSend}
-                                    disabled={!inputValue.trim() || isTyping}
-                                    className="flex-center"
-                                    style={{
-                                        width: '54px', height: '54px', borderRadius: '50%',
-                                        backgroundColor: inputValue.trim() ? 'hsl(var(--primary))' : 'rgba(255,255,255,0.1)',
-                                        color: inputValue.trim() ? 'black' : 'rgba(255,255,255,0.3)',
-                                        border: 'none', cursor: inputValue.trim() ? 'pointer' : 'default',
-                                        transition: 'all 0.2s'
-                                    }}
-                                >
-                                    <Send size={24} />
-                                </button>
                             </div>
+
+                            <Button
+                                onClick={handleSend}
+                                disabled={!inputValue.trim() || isTyping}
+                                size="icon"
+                                className={cn(
+                                    "h-10 w-10 shrink-0 rounded-full transition-all",
+                                    inputValue.trim() ? "opacity-100" : "opacity-50"
+                                )}
+                            >
+                                <Send size={18} />
+                            </Button>
+                        </div>
+
+                        <div className="max-w-3xl mx-auto text-center mt-2">
+                            <span className="text-[10px] text-muted-foreground">
+                                {isDoctorMode ? "AI Medical Scribe Active" : "Pediatric Guidance Active"}
+                            </span>
                         </div>
                     </div>
-                </>
-            )}
-        </div>
+                </div>
+            </div >
+        </Card >
     );
 }

@@ -4,7 +4,10 @@ import {
     ComposedChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
 } from 'recharts';
 import { Visit } from '@/lib/types';
-import { BOYS_WEIGHT_AGE_Z, GIRLS_WEIGHT_AGE_Z, BOYS_HEIGHT_AGE_Z, GIRLS_HEIGHT_AGE_Z } from '@/lib/growthStandards';
+import { BOYS_WEIGHT_AGE_Z, GIRLS_WEIGHT_AGE_Z, BOYS_HEIGHT_AGE_Z, GIRLS_HEIGHT_AGE_Z, BOYS_HEAD_CIRCUMFERENCE_AGE_Z, GIRLS_HEAD_CIRCUMFERENCE_AGE_Z } from '@/lib/growthStandards';
+import { Card } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { cn } from "@/lib/utils"
 
 interface ChartViewerProps {
     visits: Visit[];
@@ -18,48 +21,46 @@ const CustomTooltip = ({ active, payload, label }: any) => {
         const standards = payload.filter((p: any) => p.name !== 'Patient').sort((a: any, b: any) => b.value - a.value);
 
         return (
-            <div style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--glass-border)', padding: '1rem', borderRadius: '8px', fontSize: '0.9rem', boxShadow: '0 4px 12px rgba(0,0,0,0.5)', minWidth: '180px' }}>
-                <div style={{ borderBottom: '1px solid var(--glass-border)', paddingBottom: '0.5rem', marginBottom: '0.5rem' }}>
-                    <p style={{ margin: 0, fontWeight: 600, color: 'hsl(var(--text-secondary))' }}>
+            <Card className="p-4 shadow-xl border-border/50 bg-popover/95 backdrop-blur-sm min-w-[200px]">
+                <div className="border-b border-border pb-2 mb-2">
+                    <p className="font-semibold text-muted-foreground text-sm">
                         {`Age: ${Number(label).toFixed(1)} yrs`}
                     </p>
                 </div>
 
                 {/* Patient Data Prominently */}
                 {patientPoint ? (
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
-                        <span style={{ fontWeight: 'bold', color: 'hsl(var(--text-primary))' }}>Patient</span>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                            <span style={{ fontWeight: 'bold', color: patientPoint.color, fontSize: '1.1rem' }}>
-                                {Number(patientPoint.value).toFixed(2)}
-                            </span>
-                        </div>
+                    <div className="flex items-center justify-between mb-3 bg-muted/50 p-2 rounded-md">
+                        <span className="font-bold text-foreground">Patient</span>
+                        <span className="font-bold text-lg" style={{ color: patientPoint.color }}>
+                            {Number(patientPoint.value).toFixed(2)}
+                        </span>
                     </div>
                 ) : (
-                    <p style={{ margin: '0 0 0.75rem', color: 'hsl(var(--text-secondary))', fontStyle: 'italic', fontSize: '0.85rem' }}>No patient data</p>
+                    <p className="mb-3 text-muted-foreground italic text-sm">No patient data</p>
                 )}
 
                 {/* Standards Grid */}
-                <div style={{ display: 'grid', gap: '0.25rem', fontSize: '0.8rem', color: 'hsl(var(--text-secondary))' }}>
-                    <div style={{ fontSize: '0.75rem', textTransform: 'uppercase', marginBottom: '0.25rem', opacity: 0.7 }}>Reference</div>
+                <div className="space-y-1">
+                    <p className="text-xs uppercase text-muted-foreground font-medium mb-1 opacity-70">Reference</p>
                     {standards.map((p: any) => (
-                        <div key={p.name} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <span style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                                <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: p.color }}></span>
+                        <div key={p.name} className="flex justify-between items-center text-xs text-muted-foreground">
+                            <span className="flex items-center gap-2">
+                                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: p.color }}></span>
                                 {p.name}
                             </span>
-                            <span>{Number(p.value).toFixed(2)}</span>
+                            <span className="font-mono">{Number(p.value).toFixed(2)}</span>
                         </div>
                     ))}
                 </div>
-            </div>
+            </Card>
         );
     }
     return null;
 };
 
 export default function ChartViewer({ visits, gender }: ChartViewerProps) {
-    const [metric, setMetric] = React.useState<'weight' | 'height'>('weight');
+    const [metric, setMetric] = React.useState<'weight' | 'height' | 'head_circumference'>('weight');
 
     // Helper for Interpolation
     const interpolate = (age: number, standards: any[], key: string) => {
@@ -115,38 +116,50 @@ export default function ChartViewer({ visits, gender }: ChartViewerProps) {
     };
 
     const chartData = useMemo(() => {
-        const isWeight = metric === 'weight';
-        const standards = isWeight
-            ? (gender === 'Male' ? BOYS_WEIGHT_AGE_Z : GIRLS_WEIGHT_AGE_Z)
-            : (gender === 'Male' ? BOYS_HEIGHT_AGE_Z : GIRLS_HEIGHT_AGE_Z);
+        let standards: any[] = [];
+        if (metric === 'weight') standards = (gender === 'Male' ? BOYS_WEIGHT_AGE_Z : GIRLS_WEIGHT_AGE_Z);
+        else if (metric === 'height') standards = (gender === 'Male' ? BOYS_HEIGHT_AGE_Z : GIRLS_HEIGHT_AGE_Z);
+        else if (metric === 'head_circumference') standards = (gender === 'Male' ? BOYS_HEAD_CIRCUMFERENCE_AGE_Z : GIRLS_HEAD_CIRCUMFERENCE_AGE_Z);
 
-        const valueKey = isWeight ? 'patientWeight' : 'patientHeight';
+        const valueKey = metric === 'weight' ? 'patientWeight' : (metric === 'height' ? 'patientHeight' : 'patientHC');
+        const visitKey = metric === 'weight' ? 'weight' : (metric === 'height' ? 'height' : 'head_circumference');
+
         const patientPoints = visits.map(v => ({
             age: v.age,
-            [valueKey]: isWeight ? v.weight : v.height
+            [valueKey]: (v as any)[visitKey] // Cast to any to access dynamic key
         }));
 
         return mergeData(standards, patientPoints, valueKey);
     }, [visits, gender, metric]);
 
     const renderChart = () => {
-        const isWeight = metric === 'weight';
-        const title = isWeight ? 'Weight-for-Age' : 'Height-for-Age';
-        const dataKey = isWeight ? 'patientWeight' : 'patientHeight';
-        // User requested distinct Blue for both charts for the Patient Line
-        const color = 'var(--primary)';
-        const unit = isWeight ? 'Weight (kg)' : 'Height (cm)';
+        let title = 'Weight-for-Age';
+        let dataKey = 'patientWeight';
+        let color = 'hsl(var(--primary))';
+        let unit = 'Weight (kg)';
+
+        if (metric === 'height') {
+            title = 'Height-for-Age';
+            dataKey = 'patientHeight';
+            color = 'hsl(142, 71%, 45%)'; // Green-600 approx
+            unit = 'Height (cm)';
+        } else if (metric === 'head_circumference') {
+            title = 'Head Circumference-for-Age';
+            dataKey = 'patientHC';
+            color = 'hsl(32, 95%, 44%)'; // Orange-600 approx
+            unit = 'Head Circ. (cm)';
+        }
 
         return (
-            <div className="card" style={{ position: 'relative', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-                {/* Header with floating accent */}
-                <h3 style={{ marginBottom: '1.5rem', color: `hsl(${color})`, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: `hsl(${color})`, boxShadow: `0 0 10px hsl(${color})` }}></span>
-                    {title}
-                </h3>
-                <div style={{ height: '400px', width: '100%' }}>
+            <div className="relative overflow-hidden flex flex-col h-[450px] w-full">
+                <div className="flex items-center gap-2 mb-6 text-foreground">
+                    <span className="w-2 h-2 rounded-full" style={{ backgroundColor: color, boxShadow: `0 0 10px ${color}` }}></span>
+                    <h3 className="text-lg font-semibold" style={{ color }}>{title}</h3>
+                </div>
+
+                <div className="flex-1 w-full min-h-0">
                     <ResponsiveContainer width="100%" height="100%">
-                        <ComposedChart data={chartData} margin={{ top: 10, right: 30, left: 0, bottom: 10 }}>
+                        <ComposedChart data={chartData} margin={{ top: 10, right: 30, left: 0, bottom: 20 }}>
                             <defs>
                                 {/* Glow Filter for Patient Line */}
                                 <filter id={`glow-${dataKey}`} x="-50%" y="-50%" width="200%" height="200%">
@@ -158,40 +171,42 @@ export default function ChartViewer({ visits, gender }: ChartViewerProps) {
                                 </filter>
                             </defs>
 
-                            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+                            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} strokeOpacity={0.5} />
 
                             <XAxis
                                 dataKey="age"
                                 type="number"
                                 domain={[0, 'auto']}
-                                label={{ value: 'Age (Years)', position: 'insideBottom', offset: -5, fill: 'hsl(var(--text-secondary))', fontSize: 12 }}
-                                stroke="hsl(var(--text-secondary))"
-                                tick={{ fill: 'hsl(var(--text-secondary))', fontSize: 12 }}
+                                label={{ value: 'Age (Years)', position: 'insideBottom', offset: -15, fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
+                                stroke="hsl(var(--muted-foreground))"
+                                stdDeviation={0}
+                                tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
                                 tickCount={8}
                             />
                             <YAxis
-                                label={{ value: unit, angle: -90, position: 'insideLeft', fill: 'hsl(var(--text-secondary))', fontSize: 12, dx: 10 }}
-                                stroke="hsl(var(--text-secondary))"
-                                tick={{ fill: 'hsl(var(--text-secondary))', fontSize: 12 }}
+                                label={{ value: unit, angle: -90, position: 'insideLeft', fill: 'hsl(var(--muted-foreground))', fontSize: 12, dx: 10 }}
+                                stroke="hsl(var(--muted-foreground))"
+                                tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
+                                domain={['auto', 'auto']}
                             />
-                            <Tooltip content={<CustomTooltip />} cursor={{ stroke: 'rgba(255,255,255,0.2)', strokeWidth: 1 }} />
+                            <Tooltip content={<CustomTooltip />} cursor={{ stroke: 'hsl(var(--muted-foreground))', strokeWidth: 1, strokeOpacity: 0.5 }} />
                             <Legend wrapperStyle={{ paddingTop: '15px', fontSize: '12px' }} iconType="circle" />
 
-                            {/* Standard Deviation Lines - Subtle & Professional */}
-                            <Line type="monotone" dataKey="sd3" stroke="#ef4444" strokeWidth={1} strokeDasharray="2 4" dot={false} name="+3 SD" connectNulls strokeOpacity={0.6} />
-                            <Line type="monotone" dataKey="sd2" stroke="#f59e0b" strokeWidth={1} strokeDasharray="4 4" dot={false} name="+2 SD" connectNulls strokeOpacity={0.7} />
-                            <Line type="monotone" dataKey="sd0" stroke="#10b981" strokeWidth={2} dot={false} name="Median" connectNulls strokeOpacity={0.8} />
-                            <Line type="monotone" dataKey="sd2neg" stroke="#f59e0b" strokeWidth={1} strokeDasharray="4 4" dot={false} name="-2 SD" connectNulls strokeOpacity={0.7} />
-                            <Line type="monotone" dataKey="sd3neg" stroke="#ef4444" strokeWidth={1} strokeDasharray="2 4" dot={false} name="-3 SD" connectNulls strokeOpacity={0.6} />
+                            {/* Standard Deviation Lines - Only if standards exist */}
+                            <Line type="monotone" dataKey="sd3" stroke="#ef4444" strokeWidth={1} strokeDasharray="2 4" dot={false} name="+3 SD" connectNulls strokeOpacity={0.4} />
+                            <Line type="monotone" dataKey="sd2" stroke="#f59e0b" strokeWidth={1} strokeDasharray="4 4" dot={false} name="+2 SD" connectNulls strokeOpacity={0.5} />
+                            <Line type="monotone" dataKey="sd0" stroke="#10b981" strokeWidth={2} dot={false} name="Median" connectNulls strokeOpacity={0.6} />
+                            <Line type="monotone" dataKey="sd2neg" stroke="#f59e0b" strokeWidth={1} strokeDasharray="4 4" dot={false} name="-2 SD" connectNulls strokeOpacity={0.5} />
+                            <Line type="monotone" dataKey="sd3neg" stroke="#ef4444" strokeWidth={1} strokeDasharray="2 4" dot={false} name="-3 SD" connectNulls strokeOpacity={0.4} />
 
                             {/* Patient Line - Neon & Glowing */}
                             <Line
                                 type="monotone"
                                 dataKey={dataKey}
-                                stroke={`hsl(${color})`}
+                                stroke={color}
                                 strokeWidth={3}
-                                activeDot={{ r: 8, fill: `hsl(${color})`, stroke: 'white', strokeWidth: 2 }}
-                                dot={{ fill: 'var(--bg-primary)', stroke: `hsl(${color})`, strokeWidth: 2, r: 5 }}
+                                activeDot={{ r: 6, fill: color, stroke: 'white', strokeWidth: 2 }}
+                                dot={{ fill: 'hsl(var(--background))', stroke: color, strokeWidth: 2, r: 4 }}
                                 name="Patient"
                                 connectNulls
                                 style={{ filter: `url(#glow-${dataKey})` }}
@@ -200,41 +215,46 @@ export default function ChartViewer({ visits, gender }: ChartViewerProps) {
                         </ComposedChart>
                     </ResponsiveContainer>
                 </div>
-                {/* Glass decoration */}
-                <div style={{
-                    position: 'absolute', top: 0, right: 0, width: '150px', height: '150px',
-                    background: `radial-gradient(circle at top right, hsl(${color}) 0%, transparent 70%)`,
-                    opacity: 0.05, pointerEvents: 'none'
-                }} />
             </div>
         );
     };
 
     return (
-        <div className="animate-fade-in">
-            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '1.5rem' }}>
-                <div style={{ backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 'var(--border-radius)', padding: '4px', display: 'inline-flex', border: '1px solid var(--glass-border)' }}>
+        <div className="animate-in fade-in zoom-in-95 duration-500 w-full h-full flex flex-col">
+            <div className="flex justify-center mb-6">
+                <div className="bg-muted p-1 rounded-lg inline-flex">
                     <button
                         onClick={() => setMetric('weight')}
-                        style={{
-                            padding: '0.5rem 1.5rem', borderRadius: '8px', border: 'none', cursor: 'pointer',
-                            backgroundColor: metric === 'weight' ? 'hsl(var(--primary))' : 'transparent',
-                            color: metric === 'weight' ? 'white' : 'hsl(var(--text-secondary))',
-                            fontWeight: 600, transition: 'all 0.2s', boxShadow: metric === 'weight' ? '0 2px 10px rgba(14, 165, 233, 0.3)' : 'none'
-                        }}
+                        className={cn(
+                            "px-4 py-2 rounded-md text-sm font-medium transition-all",
+                            metric === 'weight'
+                                ? "bg-background text-foreground shadow-sm"
+                                : "text-muted-foreground hover:text-foreground"
+                        )}
                     >
                         Weight
                     </button>
                     <button
                         onClick={() => setMetric('height')}
-                        style={{
-                            padding: '0.5rem 1.5rem', borderRadius: '8px', border: 'none', cursor: 'pointer',
-                            backgroundColor: metric === 'height' ? 'hsl(var(--success))' : 'transparent',
-                            color: metric === 'height' ? 'white' : 'hsl(var(--text-secondary))',
-                            fontWeight: 600, transition: 'all 0.2s', boxShadow: metric === 'height' ? '0 2px 10px rgba(16, 185, 129, 0.3)' : 'none'
-                        }}
+                        className={cn(
+                            "px-4 py-2 rounded-md text-sm font-medium transition-all",
+                            metric === 'height'
+                                ? "bg-background text-foreground shadow-sm"
+                                : "text-muted-foreground hover:text-foreground"
+                        )}
                     >
                         Height
+                    </button>
+                    <button
+                        onClick={() => setMetric('head_circumference')}
+                        className={cn(
+                            "px-4 py-2 rounded-md text-sm font-medium transition-all",
+                            metric === 'head_circumference'
+                                ? "bg-background text-foreground shadow-sm"
+                                : "text-muted-foreground hover:text-foreground"
+                        )}
+                    >
+                        Head Circ.
                     </button>
                 </div>
             </div>

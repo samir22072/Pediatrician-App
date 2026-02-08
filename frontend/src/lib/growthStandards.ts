@@ -36,3 +36,21 @@ export const GIRLS_HEIGHT_AGE_Z = [
     { age: 4, sd3neg: 92.0, sd2neg: 95.0, sd0: 102.7, sd2: 109.0, sd3: 112.0 },
     { age: 5, sd3neg: 98.0, sd2neg: 101.0, sd0: 109.4, sd2: 116.0, sd3: 119.0 },
 ];
+
+export const BOYS_HEAD_CIRCUMFERENCE_AGE_Z = [
+    { age: 0, sd3neg: 30.3, sd2neg: 31.9, sd0: 34.5, sd2: 37.0, sd3: 38.6 },
+    { age: 1, sd3neg: 42.2, sd2neg: 43.5, sd0: 46.0, sd2: 48.6, sd3: 50.0 },
+    { age: 2, sd3neg: 44.8, sd2neg: 46.1, sd0: 48.6, sd2: 51.1, sd3: 52.4 },
+    { age: 3, sd3neg: 46.3, sd2neg: 47.7, sd0: 50.3, sd2: 52.8, sd3: 54.2 },
+    { age: 4, sd3neg: 47.2, sd2neg: 48.6, sd0: 51.4, sd2: 54.1, sd3: 55.4 },
+    { age: 5, sd3neg: 47.8, sd2neg: 49.2, sd0: 51.9, sd2: 54.7, sd3: 56.1 }, // Updated
+];
+
+export const GIRLS_HEAD_CIRCUMFERENCE_AGE_Z = [
+    { age: 0, sd3neg: 29.8, sd2neg: 31.5, sd0: 33.9, sd2: 36.2, sd3: 37.9 },
+    { age: 1, sd3neg: 40.7, sd2neg: 42.2, sd0: 44.7, sd2: 47.2, sd3: 48.7 },
+    { age: 2, sd3neg: 43.5, sd2neg: 44.9, sd0: 47.4, sd2: 49.9, sd3: 51.3 },
+    { age: 3, sd3neg: 45.3, sd2neg: 46.7, sd0: 49.3, sd2: 51.9, sd3: 53.3 },
+    { age: 4, sd3neg: 46.4, sd2neg: 47.9, sd0: 50.5, sd2: 53.1, sd3: 54.6 },
+    { age: 5, sd3neg: 47.0, sd2neg: 48.5, sd0: 51.1, sd2: 53.7, sd3: 55.2 }, // Updated
+];

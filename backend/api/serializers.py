@@ -21,7 +21,7 @@ class VisitSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Visit
-        fields = ['id', 'patient', 'date', 'age', 'height', 'weight', 'visit_type', 'vaccines', 'given_vaccines_display', 'diagnosis', 'notes', 'attachments']
+        fields = ['id', 'patient', 'date', 'age', 'height', 'weight', 'visit_type', 'vaccines', 'given_vaccines_display', 'diagnosis', 'notes', 'attachments', 'temperature', 'blood_pressure', 'heart_rate', 'head_circumference', 'prescription', 'follow_up_date']
 
     def get_given_vaccines_display(self, obj):
         return [v.vaccine_name for v in obj.given_vaccines.all()]
@@ -94,27 +94,30 @@ class PatientSerializer(serializers.ModelSerializer):
     visits = VisitSerializer(many=True, read_only=True)
     initial_weight = serializers.FloatField(write_only=True, required=False)
     initial_height = serializers.FloatField(write_only=True, required=False)
+    initial_head_circumference = serializers.FloatField(write_only=True, required=False)
     calculated_age = serializers.FloatField(write_only=True, required=False)
     
     class Meta:
         model = Patient
-        fields = ['id', 'name', 'dob', 'gender', 'father_height', 'mother_height', 'created_at', 'visits', 'initial_weight', 'initial_height', 'calculated_age']
+        fields = ['id', 'name', 'dob', 'gender', 'father_height', 'mother_height', 'created_at', 'visits', 'initial_weight', 'initial_height', 'initial_head_circumference', 'calculated_age']
         
     def create(self, validated_data):
         initial_weight = validated_data.pop('initial_weight', None)
         initial_height = validated_data.pop('initial_height', None)
+        initial_hc = validated_data.pop('initial_head_circumference', None)
         calculated_age = validated_data.pop('calculated_age', 0)
         
         patient = Patient.objects.create(**validated_data)
         
         # Create Initial Visit if vitals provided
-        if initial_weight or initial_height:
+        if initial_weight or initial_height or initial_hc:
              Visit.objects.create(
                  patient=patient,
                  date=patient.created_at.date(), # Use registration date
                  age=calculated_age or 0,
                  weight=initial_weight or 0,
                  height=initial_height or 0,
+                 head_circumference=initial_hc,
                  visit_type='Initial', # Special flag
                  diagnosis='Initial Registration',
                  notes='Auto-generated from registration.'

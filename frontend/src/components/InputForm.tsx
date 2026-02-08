@@ -1,6 +1,16 @@
-import React, { useState, ChangeEvent, FormEvent } from 'react';
+import React, { useState, ChangeEvent, FormEvent, useEffect } from 'react';
 import { Attachment } from '@/lib/types';
 import { VACCINATION_SCHEDULE } from '@/lib/vaccinationSchedule';
+
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Label } from "@/components/ui/label"
+import { Card, CardHeader, CardTitle, CardContent, CardFooter } from "@/components/ui/card"
+import { X, Calendar as CalendarIcon } from 'lucide-react';
+import { cn } from "@/lib/utils"
 
 interface InputFormProps {
     onCancel: () => void;
@@ -21,10 +31,21 @@ export default function InputForm({ onCancel, onSubmit, mode = 'new-patient', in
         age: initialData?.age || '',
         weight: initialData?.weight || '',
         height: initialData?.height || '',
+        // Optional Vitals
+        temperature: initialData?.temperature || '',
+        bloodPressure: initialData?.blood_pressure || '',
+        heartRate: initialData?.heart_rate || '',
+        headCircumference: initialData?.head_circumference || '',
+
         visitType: initialData?.visitType || ['General'], // Array
         vaccines: initialData?.vaccines || [], // Array
         diagnosis: initialData?.diagnosis || '',
         notes: initialData?.notes || '',
+
+        // Treatment
+        prescription: initialData?.prescription || '',
+        followUpDate: initialData?.follow_up_date || '',
+
         attachments: [] as Attachment[]
     });
 
@@ -62,7 +83,7 @@ export default function InputForm({ onCancel, onSubmit, mode = 'new-patient', in
         : { display: '', float: formData.age };
 
     // Update internal float age for submission if date changes
-    React.useEffect(() => {
+    useEffect(() => {
         if ((mode === 'add-visit' || mode === 'edit-visit') && patientDOB) {
             const { float } = calculateDetailedAge(patientDOB, formData.visitDate);
             if (float != formData.age) {
@@ -72,7 +93,7 @@ export default function InputForm({ onCancel, onSubmit, mode = 'new-patient', in
     }, [formData.visitDate, patientDOB, mode]);
 
 
-    const handleChange = (e: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    const handleChange = (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
         const { name, value } = e.target;
         setFormData(prev => ({ ...prev, [name]: value }));
     };
@@ -117,6 +138,7 @@ export default function InputForm({ onCancel, onSubmit, mode = 'new-patient', in
                 mother_height: Number(formData.motherHeight),
                 initial_weight: formData.weight ? Number(formData.weight) : null,
                 initial_height: formData.height ? Number(formData.height) : null,
+                initial_head_circumference: formData.headCircumference ? Number(formData.headCircumference) : null,
                 calculated_age: ageInYears > 0 ? Number(ageInYears.toFixed(2)) : 0
             });
         } else {
@@ -125,10 +147,20 @@ export default function InputForm({ onCancel, onSubmit, mode = 'new-patient', in
                 age: Number(formData.age),
                 weight: Number(formData.weight),
                 height: Number(formData.height),
+                // Optional Vitals
+                temperature: formData.temperature ? Number(formData.temperature) : null,
+                blood_pressure: formData.bloodPressure || null,
+                heart_rate: formData.heartRate ? Number(formData.heartRate) : null,
+                head_circumference: formData.headCircumference ? Number(formData.headCircumference) : null,
+
                 visit_type: Array.isArray(formData.visitType) ? formData.visitType.join(', ') : formData.visitType,
                 vaccines: formData.vaccines,
                 diagnosis: formData.diagnosis,
                 notes: formData.notes,
+
+                prescription: formData.prescription || null,
+                follow_up_date: formData.followUpDate || null,
+
                 attachments: formData.attachments
             });
         }
@@ -136,176 +168,278 @@ export default function InputForm({ onCancel, onSubmit, mode = 'new-patient', in
 
     const isVisit = mode === 'add-visit' || mode === 'edit-visit';
 
-    // Compact styles for modal usage
-    const labelStyle = { fontSize: '0.8rem', marginBottom: '0.25rem' };
-    const inputStyle = { padding: '0.5rem 0.75rem', fontSize: '0.9rem' };
-
     return (
-        <div className="card animate-fade-in" style={{ padding: '1.5rem', maxHeight: '90vh', overflowY: 'auto' }}>
-            <h2 style={{ marginTop: 0, marginBottom: '1.5rem', color: 'hsl(var(--primary))', borderBottom: '1px solid var(--glass-border)', paddingBottom: '0.5rem', fontSize: '1.25rem' }}>
-                {mode === 'new-patient' ? 'New Subject Registration' : mode === 'edit-visit' ? 'Update Mission Log' : 'Add New Visit'}
-            </h2>
+        <Card className="w-full h-full max-h-[90vh] overflow-hidden border-0 shadow-none sm:border sm:shadow-lg flex flex-col">
+            <CardHeader className="border-b bg-muted/40 pb-4 shrink-0">
+                <CardTitle className="text-xl text-primary flex items-center gap-2">
+                    {mode === 'new-patient' ? 'New Patient Registration' : mode === 'edit-visit' ? 'Update Visit' : 'Add New Visit'}
+                </CardTitle>
+            </CardHeader>
 
-            <form onSubmit={handleSubmit} style={{ display: 'grid', gap: '1rem', gridTemplateColumns: 'repeat(2, 1fr)' }}>
-                {mode === 'new-patient' && (
-                    <>
-                        <div style={{ gridColumn: '1 / -1' }}>
-                            <label className="label" style={labelStyle}>Full Name</label>
-                            <input type="text" name="name" className="input-field" style={inputStyle} value={formData.name} onChange={handleChange} required placeholder="Subject Name" />
-                        </div>
-                        <div>
-                            <label className="label" style={labelStyle}>Date of Birth</label>
-                            <input type="date" name="dob" className="input-field" style={inputStyle} value={formData.dob} onChange={handleChange} required />
-                        </div>
-                        <div>
-                            <label className="label" style={labelStyle}>Gender</label>
-                            <select name="gender" className="input-field" style={inputStyle} value={formData.gender} onChange={handleChange}>
-                                <option value="Male">Male</option>
-                                <option value="Female">Female</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label className="label" style={labelStyle}>Father's Height (cm)</label>
-                            <input type="number" name="fatherHeight" className="input-field" style={inputStyle} value={formData.fatherHeight} onChange={handleChange} step="0.1" />
-                        </div>
-                        <div>
-                            <label className="label" style={labelStyle}>Mother's Height (cm)</label>
-                            <input type="number" name="motherHeight" className="input-field" style={inputStyle} value={formData.motherHeight} onChange={handleChange} step="0.1" />
-                        </div>
-
-                        <div style={{ gridColumn: '1 / -1', marginTop: '0.5rem', borderTop: '1px solid var(--glass-border)', paddingTop: '0.75rem' }}>
-                            <label className="label" style={{ color: 'hsl(var(--primary))', fontSize: '0.85rem' }}>Initial Vitals (Optional)</label>
-                        </div>
-                        <div>
-                            <label className="label" style={labelStyle}>Weight (kg)</label>
-                            <input type="number" name="weight" className="input-field" style={inputStyle} value={formData.weight} onChange={handleChange} step="0.01" />
-                        </div>
-                        <div>
-                            <label className="label" style={labelStyle}>Height (cm)</label>
-                            <input type="number" name="height" className="input-field" style={inputStyle} value={formData.height} onChange={handleChange} step="0.1" />
-                        </div>
-                    </>
-                )}
-
-                {isVisit && (
-                    <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem' }}>
-                        {/* Left Column: Vitals & Info */}
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                                <div>
-                                    <label className="label" style={labelStyle}>Date</label>
-                                    <input type="date" name="visitDate" className="input-field" style={inputStyle} value={formData.visitDate} onChange={handleChange} required />
-                                </div>
-                                <div>
-                                    <label className="label" style={labelStyle}>Age</label>
-                                    <div className="input-field" style={{
-                                        ...inputStyle,
-                                        backgroundColor: 'rgba(255,255,255,0.05)',
-                                        color: 'hsl(var(--primary))',
-                                        fontWeight: 600,
-                                        display: 'flex', alignItems: 'center'
-                                    }}>
-                                        {ageDetails.display || formData.age + ' yrs'}
-                                    </div>
-                                    <input type="hidden" name="age" value={formData.age} />
+            <div className="flex-1 overflow-y-auto p-6">
+                <form id="input-form" onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {mode === 'new-patient' && (
+                        <>
+                            <div className="col-span-1 md:col-span-2 space-y-2">
+                                <Label>Full Name</Label>
+                                <Input name="name" value={formData.name} onChange={handleChange} required placeholder="Patient Name" className="bg-background" />
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Date of Birth</Label>
+                                <div className="relative">
+                                    <Input
+                                        type="date"
+                                        name="dob"
+                                        value={formData.dob}
+                                        onChange={handleChange}
+                                        required
+                                        className="bg-background pl-10 hide-date-icon"
+                                        onClick={(e) => (e.target as HTMLInputElement).showPicker()}
+                                    />
+                                    <CalendarIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-foreground/80 pointer-events-none" />
                                 </div>
                             </div>
+                            <div className="space-y-2">
+                                <Label>Gender</Label>
+                                <Select value={formData.gender} onValueChange={(val) => setFormData(prev => ({ ...prev, gender: val }))} >
+                                    <SelectTrigger className="bg-background">
+                                        <SelectValue placeholder="Select Gender" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="Male">Male</SelectItem>
+                                        <SelectItem value="Female">Female</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Father's Height (cm)</Label>
+                                <Input type="number" name="fatherHeight" value={formData.fatherHeight} onChange={handleChange} step="0.1" className="bg-background" />
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Mother's Height (cm)</Label>
+                                <Input type="number" name="motherHeight" value={formData.motherHeight} onChange={handleChange} step="0.1" className="bg-background" />
+                            </div>
 
-                            <div>
-                                <label className="label" style={labelStyle}>Visit Type</label>
-                                <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
-                                    {['General', 'Sick', 'Vaccination', 'Follow-up'].map(type => (
-                                        <label key={type} style={{
-                                            display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer',
-                                            padding: '0.4rem 0.6rem', borderRadius: 'var(--border-radius)',
-                                            border: '1px solid var(--glass-border)',
-                                            backgroundColor: formData.visitType.includes(type) ? 'rgba(14, 165, 233, 0.2)' : 'transparent',
-                                            borderColor: formData.visitType.includes(type) ? 'hsl(var(--primary))' : 'var(--glass-border)',
-                                            fontSize: '0.8rem'
-                                        }}>
-                                            <input
-                                                type="checkbox"
-                                                style={{ display: 'none' }}
-                                                checked={formData.visitType.includes(type)}
-                                                onChange={() => handleVisitTypeChange(type)}
+                            <div className="col-span-1 md:col-span-2 pt-4 border-t">
+                                <Label className="text-primary text-base">Initial Vitals (Optional)</Label>
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Weight (kg)</Label>
+                                <Input type="number" name="weight" value={formData.weight} onChange={handleChange} step="0.01" className="bg-background" />
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Height (cm)</Label>
+                                <Input type="number" name="height" value={formData.height} onChange={handleChange} step="0.1" className="bg-background" />
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Head Circumference (cm)</Label>
+                                <Input type="number" name="headCircumference" value={formData.headCircumference} onChange={handleChange} step="0.1" className="bg-background" />
+                            </div>
+                        </>
+                    )}
+
+                    {isVisit && (
+                        <div className="col-span-1 md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-8">
+                            {/* Left Column: Vitals & Info */}
+                            <div className="space-y-6">
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-2">
+                                        <Label>Date</Label>
+                                        <div className="relative">
+                                            <Input
+                                                type="date"
+                                                name="visitDate"
+                                                value={formData.visitDate}
+                                                onChange={handleChange}
+                                                required
+                                                className="bg-background pl-10 hide-date-icon"
+                                                onClick={(e) => (e.target as HTMLInputElement).showPicker()}
                                             />
-                                            {type}
-                                        </label>
-                                    ))}
+                                            <CalendarIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-foreground/80 pointer-events-none" />
+                                        </div>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label>Age</Label>
+                                        <div className="flex h-10 w-full items-center rounded-md border border-input bg-muted/50 px-3 py-2 text-sm font-semibold text-primary">
+                                            {ageDetails.display || formData.age + ' yrs'}
+                                        </div>
+                                    </div>
                                 </div>
-                            </div>
 
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                                <div>
-                                    <label className="label" style={labelStyle}>Weight (kg)</label>
-                                    <input type="number" name="weight" className="input-field" style={inputStyle} value={formData.weight} onChange={handleChange} required step="0.01" />
-                                </div>
-                                <div>
-                                    <label className="label" style={labelStyle}>Height (cm)</label>
-                                    <input type="number" name="height" className="input-field" style={inputStyle} value={formData.height} onChange={handleChange} required step="0.1" />
-                                </div>
-                            </div>
-
-                            {formData.visitType.includes('Vaccination') && (
-                                <div style={{ padding: '0.75rem', backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 'var(--border-radius)' }}>
-                                    <label className="label" style={{ color: 'hsl(var(--success))', fontSize: '0.85rem' }}>Vaccines Administered</label>
-                                    <select className="input-field" style={inputStyle} onChange={(e) => { handleVaccineChange(e.target.value); e.target.value = ''; }}>
-                                        <option value="">-- Select Vaccine --</option>
-                                        {VACCINATION_SCHEDULE.map((group, idx) => (
-                                            <optgroup key={idx} label={group.label}>
-                                                {group.vaccines.map(v => (
-                                                    <option key={v} value={v}>{v}</option>
-                                                ))}
-                                            </optgroup>
-                                        ))}
-                                    </select>
-                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginTop: '0.75rem' }}>
-                                        {formData.vaccines.map((v: string) => (
-                                            <span key={v} style={{
-                                                padding: '0.2rem 0.6rem', borderRadius: '2rem',
-                                                backgroundColor: 'hsl(var(--success))', color: 'black', fontWeight: 600,
-                                                fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.5rem'
-                                            }}>
-                                                {v}
-                                                <button type="button" onClick={() => removeVaccine(v)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}>&times;</button>
-                                            </span>
+                                <div className="space-y-2">
+                                    <Label>Visit Type</Label>
+                                    <div className="flex flex-wrap gap-3 p-3 border rounded-md bg-background/50">
+                                        {['General', 'Sick', 'Vaccination', 'Follow-up'].map(type => (
+                                            <div key={type} className="flex items-center space-x-2">
+                                                <Checkbox
+                                                    id={`vt-${type}`}
+                                                    checked={formData.visitType.includes(type)}
+                                                    onCheckedChange={() => handleVisitTypeChange(type)}
+                                                />
+                                                <Label htmlFor={`vt-${type}`} className="text-sm font-medium cursor-pointer">{type}</Label>
+                                            </div>
                                         ))}
                                     </div>
                                 </div>
-                            )}
-                        </div>
 
-                        {/* Right Column: Diagnosis & Notes */}
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', height: '100%', minHeight: '600px' }}>
-                            <div>
-                                <label className="label" style={labelStyle}>Diagnosis / Focus</label>
-                                <input type="text" name="diagnosis" className="input-field" style={{ ...inputStyle, width: '100%', borderColor: 'hsl(var(--primary))' }} value={formData.diagnosis} onChange={handleChange} placeholder="e.g. Viral Fever" />
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-2">
+                                        <Label>Weight (kg)</Label>
+                                        <Input type="number" name="weight" value={formData.weight} onChange={handleChange} required step="0.01" className="bg-background" />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label>Height (cm)</Label>
+                                        <Input type="number" name="height" value={formData.height} onChange={handleChange} required step="0.1" className="bg-background" />
+                                    </div>
+                                </div>
+
+                                {/* Optional Vitals */}
+                                <div className="pt-4 border-t space-y-4">
+                                    <Label className="text-muted-foreground font-semibold">Optional Vitals</Label>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="space-y-2">
+                                            <Label className="text-xs text-muted-foreground">Head Circ. (cm)</Label>
+                                            <Input type="number" name="headCircumference" value={formData.headCircumference} onChange={handleChange} step="0.1" placeholder="35.5" className="bg-background h-9" />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label className="text-xs text-muted-foreground">Temp (F)</Label>
+                                            <Input type="number" name="temperature" value={formData.temperature} onChange={handleChange} step="0.1" placeholder="98.6" className="bg-background h-9" />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label className="text-xs text-muted-foreground">BP</Label>
+                                            <Input type="text" name="bloodPressure" value={formData.bloodPressure} onChange={handleChange} placeholder="120/80" className="bg-background h-9" />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label className="text-xs text-muted-foreground">Pulse</Label>
+                                            <Input type="number" name="heartRate" value={formData.heartRate} onChange={handleChange} placeholder="BPM" className="bg-background h-9" />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {formData.visitType.includes('Vaccination') && (
+                                    <div className="p-4 bg-muted/30 rounded-lg space-y-3 border border-border">
+                                        <Label className="text-green-500 font-semibold">Vaccines Administered</Label>
+                                        <Select onValueChange={handleVaccineChange}>
+                                            <SelectTrigger className="bg-background">
+                                                <SelectValue placeholder="Select Vaccine" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {VACCINATION_SCHEDULE.map((group, idx) => (
+                                                    <SelectGroup key={idx}>
+                                                        <SelectLabel className="text-muted-foreground">{group.label}</SelectLabel>
+                                                        {group.vaccines.map(v => (
+                                                            <SelectItem key={v} value={v}>{v}</SelectItem>
+                                                        ))}
+                                                    </SelectGroup>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+
+                                        <div className="flex flex-wrap gap-2 pt-2">
+                                            {formData.vaccines.map((v: string) => (
+                                                <div key={v} className="bg-green-500/10 text-green-600 dark:text-green-400 px-3 py-1 rounded-full text-xs font-semibold flex items-center gap-2 border border-green-500/20">
+                                                    {v}
+                                                    <button type="button" onClick={() => removeVaccine(v)} className="hover:text-destructive transition-colors">
+                                                        <X size={12} />
+                                                    </button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
                             </div>
 
-                            <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-                                <label className="label" style={labelStyle}>Clinical Notes</label>
-                                <textarea
-                                    name="notes"
-                                    className="input-field"
-                                    style={{ ...inputStyle, flex: 1, width: '100%', resize: 'none', lineHeight: '1.5' }}
-                                    value={formData.notes}
-                                    onChange={handleChange}
-                                    placeholder="Comprehensive clinical notes..."
-                                ></textarea>
+                            {/* Right Column: Diagnosis & Notes & Plan */}
+                            <div className="flex flex-col gap-6 h-full min-h-[500px]">
+                                <div className="space-y-2">
+                                    <Label>Diagnosis / Focus</Label>
+                                    <Input name="diagnosis" className="border-primary/50 bg-background font-medium" value={formData.diagnosis} onChange={handleChange} placeholder="e.g. Viral Fever" />
+                                </div>
+
+                                <div className="flex-1 flex flex-col space-y-2">
+                                    <Label>Clinical Notes</Label>
+                                    <Textarea
+                                        name="notes"
+                                        className="flex-1 min-h-[120px] resize-none bg-background leading-relaxed"
+                                        value={formData.notes}
+                                        onChange={handleChange}
+                                        placeholder="Comprehensive clinical notes..."
+                                    />
+                                </div>
+
+                                <div className="flex-1 flex flex-col space-y-2">
+                                    <Label>Prescription / Treatment Plan</Label>
+                                    <Textarea
+                                        name="prescription"
+                                        className="flex-1 min-h-[120px] resize-none border-blue-500/30 bg-background/50 leading-relaxed"
+                                        value={formData.prescription}
+                                        onChange={handleChange}
+                                        placeholder="Rx..."
+                                    />
+                                </div>
+
+                                <div className="space-y-2">
+                                    <Label>Follow-up Date</Label>
+                                    <div className="space-y-2">
+                                        <div className="relative">
+                                            <Input
+                                                type="date"
+                                                name="followUpDate"
+                                                value={formData.followUpDate}
+                                                onChange={handleChange}
+                                                min={new Date().toISOString().split('T')[0]}
+                                                className="cursor-pointer bg-background pl-10 hide-date-icon"
+                                                onClick={(e) => {
+                                                    try {
+                                                        if ('showPicker' in HTMLInputElement.prototype) {
+                                                            (e.target as HTMLInputElement).showPicker();
+                                                        }
+                                                    } catch (err) { }
+                                                }}
+                                            />
+                                            <CalendarIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-foreground/80 pointer-events-none" />
+                                        </div>
+
+                                        <div className="flex flex-wrap gap-2">
+                                            {[
+                                                { label: '3 Days', days: 3 },
+                                                { label: '5 Days', days: 5 },
+                                                { label: '1 Week', days: 7 },
+                                                { label: '2 Weeks', days: 14 },
+                                                { label: '1 Month', days: 30 }
+                                            ].map(period => (
+                                                <Button
+                                                    key={period.label}
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    className="h-7 text-xs border border-border"
+                                                    onClick={() => {
+                                                        const date = new Date();
+                                                        date.setDate(date.getDate() + period.days);
+                                                        const dateStr = date.toISOString().split('T')[0];
+                                                        setFormData(prev => ({ ...prev, followUpDate: dateStr }));
+                                                    }}
+                                                >
+                                                    +{period.label}
+                                                </Button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
-                    </div>
-                )}
-
-                <div style={{ gridColumn: '1 / -1', display: 'flex', gap: '1rem', marginTop: '0.5rem' }}>
-                    <button type="button" className="btn" style={{ backgroundColor: 'transparent', border: '1px solid var(--glass-border)', color: 'hsl(var(--text-secondary))', flex: 1, padding: '0.5rem' }} onClick={onCancel}>
-                        Cancel
-                    </button>
-                    <button type="submit" className="btn btn-primary" style={{ flex: 1, padding: '0.5rem' }}>
-                        {mode === 'new-patient' ? 'Create Record' : 'Save Data'}
-                    </button>
-                </div>
-            </form>
-        </div>
+                    )}
+                </form>
+            </div>
+            <CardFooter className="shrink-0 flex gap-4 border-t bg-muted/40 p-6 pt-4">
+                <Button type="button" variant="outline" className="flex-1" onClick={onCancel}>
+                    Cancel
+                </Button>
+                <Button type="submit" form="input-form" className="flex-1">
+                    {mode === 'new-patient' ? 'Create Record' : 'Save Data'}
+                </Button>
+            </CardFooter>
+        </Card>
     );
 }
