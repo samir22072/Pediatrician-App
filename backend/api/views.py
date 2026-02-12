@@ -3,6 +3,11 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from django.shortcuts import get_object_or_404
+from django.contrib.auth import authenticate
+from django.contrib.auth.models import User
+from rest_framework.authtoken.models import Token
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from django.db.models import Avg, Count
 from dotenv import load_dotenv
 
@@ -22,18 +27,76 @@ from .serializers import (
 load_dotenv()
 API_KEY = os.getenv("GEMINI_API_KEY")
 
-class PatientListView(APIView):
+# --- Authentication Views ---
+class LoginView(APIView):
+    permission_classes = [AllowAny]
+
     def post(self, request):
-        patients = Patient.objects.all().order_by('-created_at')
+        username = request.data.get('username')
+        password = request.data.get('password')
+        user = authenticate(username=username, password=password)
+        
+        if user:
+            token, _ = Token.objects.get_or_create(user=user)
+            role = 'doctor' if user.is_staff else 'patient'
+            patient_id = None
+            if role == 'patient' and hasattr(user, 'patient_profile'):
+                 patient_id = user.patient_profile.id
+            
+            return Response({
+                'token': token.key,
+                'role': role,
+                'username': user.username,
+                'patientId': patient_id
+            })
+        return Response({'error': 'Invalid Credentials'}, status=status.HTTP_400_BAD_REQUEST)
+
+class PatientListView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        if request.user.is_staff:
+            patients = Patient.objects.all().order_by('-created_at')
+        else:
+            # Patients can only see their own profile
+            patients = Patient.objects.filter(user=request.user)
+            
         serializer = PatientSerializer(patients, many=True)
         return Response(serializer.data)
 
+from rest_framework.permissions import IsAuthenticated, IsAdminUser
+
 class PatientCreateView(APIView):
+    permission_classes = [IsAdminUser]
+
     def post(self, request):
         serializer = PatientSerializer(data=request.data)
         if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
+            patient = serializer.save()
+            
+            # Auto-create User
+            try:
+                username = patient.name.lower().replace(" ", "")
+                # Simple uniquifier if needed
+                if User.objects.filter(username=username).exists():
+                    import random
+                    username = f"{username}{random.randint(100, 999)}"
+                
+                user = User.objects.create_user(username=username, password='password123')
+                patient.user = user
+                patient.save()
+                
+                # Update response data to include creds (optional but helpful)
+                data = serializer.data
+                data['username'] = username
+                data['temp_password'] = 'password123'
+                return Response(data, status=status.HTTP_201_CREATED)
+                
+            except Exception as e:
+                print(f"Error creating user: {e}")
+                # Return success for patient but warn about user
+                return Response(serializer.data, status=status.HTTP_201_CREATED)
+
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class PatientDetailView(APIView):
@@ -271,6 +334,23 @@ class AISummarizeView(APIView):
 
         history = request.data.get('history', [])
         patient_id = request.data.get('patientId')
+        session_id = request.data.get('sessionId')
+        
+        # --- Caching Logic ---
+        session = None
+        if session_id:
+            from .models import ChatSession
+            try:
+                session = ChatSession.objects.get(pk=session_id)
+                # Check if cache is valid (same message count)
+                # Note: 'history' includes the latest user message usually, but let's trust the length passed from frontend
+                current_msg_count = len(history) 
+                
+                if session.summary and session.cached_message_count == current_msg_count:
+                    print(f"Returning CACHED summary for session {session_id}")
+                    return Response({'summary': session.summary})
+            except ChatSession.DoesNotExist:
+                pass
         
         pending_vaccines = []
         if patient_id:
@@ -288,72 +368,141 @@ class AISummarizeView(APIView):
             last_visit = Visit.objects.filter(patient_id=patient_id).order_by('-date').first()
             if last_visit:
                 latest_vitals = f"Weight: {last_visit.weight} kg, Height: {last_visit.height} cm"
+                if last_visit.head_circumference:
+                     latest_vitals += f", Head Circumference: {last_visit.head_circumference} cm"
         
-        # Convert history to a string block for the prompt
-        conversation_text = ""
-        for msg in history:
-            role = "Parent" if msg.get('role') == 'user' else "Assistant"
-            conversation_text += f"{role}: {msg.get('text')}\n"
-            
         try:
             # Initialize Model
             llm = ChatGoogleGenerativeAI(
                 model="gemini-flash-latest",
                 google_api_key=API_KEY,
-                temperature=0.2 # Lower temperature for factual summary
+                temperature=0.2
             )
-            
-            # Define Prompt - Using standard string (not f-string) to avoid escaping issues
-            template = """
-            Act as a medical assistant. Based on the conversation below, generate a JSON summary for a visit record.
-            
-            Context:
-            - Latest recorded Vitals: {latest_vitals}
-            
-            Instructions:
-            1. Extract 'diagnosis' (short clinical term).
-            2. Extract 'notes' (detailed summary of symptoms/advice).
-            3. Extract 'weight' and 'height' if mentioned in chat. IF NOT MENTIONED, attempt to use 'Latest recorded Vitals'. If unknown, use null.
-            4. DETERMINE 'visit_type':
-               - "Sick": if symptoms (fever, cough, pain, etc.) are discussed.
-               - "Vaccination": if vaccines are mentioned or administered.
-               - "Growth Check": if only weight/height/feeding is discussed.
-               - "General": if routine checkup or unclear.
-               - Return a LIST of matching tags. Example: ["Sick", "Vaccination"].
-            5. Extract 'given_vaccines' (list of strings) if administered.
-            6. Return ONLY valid JSON. Do not write "json" or backticks.
 
-            Conversation:
-            {conversation_text}
+            # --- Incremental Logic ---
+            previous_summary = None
+            new_messages_text = ""
+            current_msg_count = len(history)
+
+            if session and session.summary and session.cached_message_count < current_msg_count:
+                print(f"Incremental Update: {session.cached_message_count} -> {current_msg_count}")
+                previous_summary = session.summary
+                # Get only new messages
+                new_msgs = history[session.cached_message_count:]
+                for msg in new_msgs:
+                    role = "Parent" if msg.get('role') == 'user' else "Assistant"
+                    new_messages_text += f"{role}: {msg.get('text')}\n"
+            else:
+                # Full Generation
+                for msg in history:
+                    role = "Parent" if msg.get('role') == 'user' else "Assistant"
+                    new_messages_text += f"{role}: {msg.get('text')}\n"
+
             
-            JSON Structure:
-            {{
-                "diagnosis": "string",
-                "notes": "string",
-                "weight": number or null,
-                "height": number or null,
-                "visit_type": ["Sick", "Vaccination"],
-                "given_vaccines": ["vaccine1"]
-            }}
-            Do not include markdown code blocks, just raw JSON.
-            """
-            
-            prompt = PromptTemplate(
-                template=template,
-                input_variables=["conversation_text", "latest_vitals"]
-            )
-            
-            # Create Chain: Prompt -> LLM -> String Parser
-            chain = prompt | llm | StrOutputParser()
-            
-            # Run Chain
-            result = chain.invoke({
-                "conversation_text": conversation_text,
-                "latest_vitals": latest_vitals
-            })
+            if previous_summary:
+                # Incremental Prompt
+                template = """
+                Act as a medical assistant. You have a PREVIOUS SUMMARY of a patient visit and some NEW MESSAGES.
+                Your task is to UPDATE the summary to include any new information from the new messages.
+                
+                Previous Summary (JSON):
+                {previous_summary}
+                
+                New Messages:
+                {new_messages_text}
+                
+                Context:
+                - Latest recorded Vitals: {latest_vitals}
+                
+                Instructions:
+                1. Update 'diagnosis' if new symptoms clarify it.
+                2. Append important new details to 'notes'. Do NOT remove important old details unless contradicted.
+                3. Update 'weight'/'height'/'head_circumference' ONLY if explicitly mentioned in NEW messages (otherwise keep old or use vitals).
+                4. Merge 'visit_type' (add new tags if relevant).
+                5. Merge 'given_vaccines'.
+                6. Return the FULL updated JSON in the same format.
+                
+                JSON Structure:
+                {{
+                    "diagnosis": "string",
+                    "notes": "string",
+                    "weight": number or null,
+                    "height": number or null,
+                    "head_circumference": number or null,
+                    "visit_type": ["Sick", "Vaccination"],
+                    "given_vaccines": ["vaccine1"]
+                }}
+                Do not include markdown code blocks, just raw JSON.
+                """
+                
+                prompt = PromptTemplate(
+                    template=template,
+                    input_variables=["previous_summary", "new_messages_text", "latest_vitals"]
+                )
+                
+                chain = prompt | llm | StrOutputParser()
+                result = chain.invoke({
+                    "previous_summary": previous_summary,
+                    "new_messages_text": new_messages_text,
+                    "latest_vitals": latest_vitals
+                })
+
+            else:
+                # Standard Full Prompt (Existing Logic)
+                template = """
+                Act as a medical assistant. Based on the conversation below, generate a JSON summary for a visit record.
+                
+                Context:
+                - Latest recorded Vitals: {latest_vitals}
+                
+                Instructions:
+                1. Extract 'diagnosis' (short clinical term).
+                2. Extract 'notes' (detailed summary of symptoms/advice).
+                3. Extract 'weight', 'height', and 'head_circumference' if mentioned in chat. IF NOT MENTIONED, attempt to use 'Latest recorded Vitals'. If unknown, use null.
+                4. DETERMINE 'visit_type':
+                   - "Sick": if symptoms (fever, cough, pain, etc.) are discussed.
+                   - "Vaccination": if vaccines are mentioned or administered.
+                   - "Growth Check": if only weight/height/feeding is discussed.
+                   - "General": if routine checkup or unclear.
+                   - Return a LIST of matching tags. Example: ["Sick", "Vaccination"].
+                5. Extract 'given_vaccines' (list of strings) if administered.
+                6. Return ONLY valid JSON. Do not write "json" or backticks.
+    
+                Conversation:
+                {new_messages_text}
+                
+                JSON Structure:
+                {{
+                    "diagnosis": "string",
+                    "notes": "string",
+                    "weight": number or null,
+                    "height": number or null,
+                    "head_circumference": number or null,
+                    "visit_type": ["Sick", "Vaccination"],
+                    "given_vaccines": ["vaccine1"]
+                }}
+                Do not include markdown code blocks, just raw JSON.
+                """
+                
+                prompt = PromptTemplate(
+                    template=template,
+                    input_variables=["new_messages_text", "latest_vitals"]
+                )
+                
+                chain = prompt | llm | StrOutputParser()
+                result = chain.invoke({
+                    "new_messages_text": new_messages_text,
+                    "latest_vitals": latest_vitals
+                })
             
             # Clean result of any markdown if LangChain didn't catch it
             cleaned_result = result.replace('```json', '').replace('```', '').strip()
+            
+            # --- Save to Cache ---
+            if session:
+                session.summary = cleaned_result
+                session.cached_message_count = len(history)
+                session.save()
             
             return Response({'summary': cleaned_result})
             

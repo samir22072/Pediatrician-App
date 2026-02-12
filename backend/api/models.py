@@ -9,6 +9,7 @@ class Patient(models.Model):
     father_height = models.FloatField(help_text="Height in cm")
     mother_height = models.FloatField(help_text="Height in cm")
     created_at = models.DateTimeField(auto_now_add=True)
+    user = models.OneToOneField('auth.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='patient_profile')
 
     def __str__(self):
         return self.name
@@ -19,6 +20,8 @@ class ChatSession(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     name = models.CharField(max_length=200, default="New Chat")
+    summary = models.TextField(blank=True, null=True)
+    cached_message_count = models.IntegerField(default=0)
 
     class Meta:
         ordering = ['-updated_at']

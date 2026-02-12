@@ -28,6 +28,7 @@ export default function DashboardPage({ onPatientSelect }: DashboardPageProps) {
     const handleNewPatient = async (data: any) => {
         try {
             const res = await PatientService.create(data);
+            alert('Patient Created Successfully!');
             await fetchPatients(); // Refresh locally
             onPatientSelect(res.data.id); // Navigate to details
         } catch (err) {

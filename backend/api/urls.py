@@ -1,5 +1,6 @@
 from django.urls import path, include
 from .views import (
+    LoginView,
     PatientListView, PatientCreateView, PatientDetailView,
     VisitCreateView, VisitUpdateView, DashboardView,
     AIChatView, AISummarizeView, AIHistorySummaryView,
@@ -9,6 +10,7 @@ from .views import (
 
 
 urlpatterns = [
+    path('login/', LoginView.as_view(), name='login'),
     path('patients/list/', PatientListView.as_view(), name='patient-list'),
     path('patients/create/', PatientCreateView.as_view(), name='patient-create'),
     path('patients/detail/', PatientDetailView.as_view(), name='patient-detail'),

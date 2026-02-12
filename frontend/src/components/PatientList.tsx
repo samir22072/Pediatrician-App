@@ -23,7 +23,7 @@ export default function PatientList({ patients, onSelectPatient, onAddNew }: Pat
 
     // Stats
     const totalPatients = patients.length;
-    const totalVisits = patients.reduce((acc, p) => acc + (p.visits?.length || 0), 0);
+    const totalVisits = patients.reduce((acc, p) => acc + (p.visits?.filter(v => v.visit_type !== 'Initial').length || 0), 0);
 
     // Calculate Average Age
     const validAges = patients

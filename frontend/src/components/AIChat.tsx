@@ -57,7 +57,11 @@ export default function AIChat({ patientName, patientId, patientStats, onTransfe
     // Load sessions on mount
     useEffect(() => {
         loadSessions();
-        // Check local storage for mode preference? For now default to false
+        // Check local storage for role
+        const role = localStorage.getItem('role');
+        if (role !== 'doctor') {
+            setIsDoctorMode(false);
+        }
     }, []);
 
     // Auto-scroll effect
@@ -300,20 +304,46 @@ export default function AIChat({ patientName, patientId, patientStats, onTransfe
             const history = messages.map(m => ({ role: m.sender, text: m.text }));
             const res = await AIService.summarize({
                 patientId,
-                history
+                history,
+                sessionId: currentSessionId
             });
 
             if (res.data.summary) {
+                let parsedSummary = null;
+                let displayText = res.data.summary;
+
+                try {
+                    // Attempt to parse the JSON string
+                    // Clean code blocks just in case backend missed some
+                    const cleanJson = res.data.summary.replace(/```json/g, '').replace(/```/g, '').trim();
+                    parsedSummary = JSON.parse(cleanJson);
+
+                    // If successful, pretty print usage in chat or just confirmation
+                    displayText = "Visit Report Data Generated successfully.";
+                } catch (e) {
+                    // Fallback to text if not valid JSON
+                    parsedSummary = null;
+                    displayText = `**Report Generated:**\n\n${res.data.summary}`;
+                }
+
                 const reportMsg: Message = {
                     id: Date.now().toString(),
                     sender: 'ai',
-                    text: `**Report Generated:**\n\n${res.data.summary}`,
+                    text: displayText,
+                    structuredData: parsedSummary,
                     timestamp: new Date().toISOString()
                 };
-                setMessages(prev => [...prev, reportMsg]);
-                // Save to DB? The summarize endpoint doesn't automatically save it to chat history usually.
-                // We might want to save it as a message if we want it to persist.
-                // For now, let's just display it. If the user wants to save, they can copy it.
+
+                // Only add to chat if parsing FAILED (so user sees raw output)
+                // If successful, onTransfer handles it and we don't need a chat message
+                if (!parsedSummary) {
+                    setMessages(prev => [...prev, reportMsg]);
+                }
+
+                // Auto-transfer if we have valid data and the callback exists
+                if (parsedSummary && onTransfer) {
+                    onTransfer(parsedSummary);
+                }
             }
         } catch (err) {
             console.error("Generate report failed", err);
@@ -379,25 +409,28 @@ export default function AIChat({ patientName, patientId, patientStats, onTransfe
                         </TooltipProvider>
                     )}
 
-                    <TooltipProvider>
-                        <Tooltip>
-                            <TooltipTrigger asChild>
-                                <div className="flex items-center gap-2 px-2">
-                                    <Label htmlFor="mode-switch" className="text-xs font-medium cursor-pointer hidden sm:inline-block">
-                                        {isDoctorMode ? 'Doctor Mode' : 'Patient Mode'}
-                                    </Label>
-                                    <Switch
-                                        id="mode-switch"
-                                        checked={isDoctorMode}
-                                        onCheckedChange={toggleMode}
-                                    />
-                                </div>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                                <p>Switch between Patient and Doctor personas</p>
-                            </TooltipContent>
-                        </Tooltip>
-                    </TooltipProvider>
+                    {/* Only show switch if user is a doctor */}
+                    {typeof window !== 'undefined' && localStorage.getItem('role') === 'doctor' && (
+                        <TooltipProvider>
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <div className="flex items-center gap-2 px-2">
+                                        <Label htmlFor="mode-switch" className="text-xs font-medium cursor-pointer hidden sm:inline-block">
+                                            {isDoctorMode ? 'Doctor Mode' : 'Patient Mode'}
+                                        </Label>
+                                        <Switch
+                                            id="mode-switch"
+                                            checked={isDoctorMode}
+                                            onCheckedChange={toggleMode}
+                                        />
+                                    </div>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                    <p>Switch between Patient and Doctor personas</p>
+                                </TooltipContent>
+                            </Tooltip>
+                        </TooltipProvider>
+                    )}
                 </div>
             </div>
 

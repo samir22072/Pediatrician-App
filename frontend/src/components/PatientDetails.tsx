@@ -89,8 +89,8 @@ export default function PatientDetails({ patient, onBack, onAddVisit, onEditVisi
 
                         <div className="w-full h-px bg-border my-2" />
 
-                        <div className="grid grid-cols-2 gap-4 w-full text-left">
-                            <div className="col-span-2 pb-4 border-b">
+                        <div className="grid grid-cols-3 gap-4 w-full text-left">
+                            <div className="col-span-3 pb-4 border-b">
                                 <p className="text-sm font-medium text-muted-foreground mb-1">Current Age</p>
                                 <p className="text-2xl font-bold text-foreground">{calculateAge(patient.dob)}</p>
                             </div>
@@ -105,15 +105,15 @@ export default function PatientDetails({ patient, onBack, onAddVisit, onEditVisi
                                         <p className="text-sm font-medium text-muted-foreground mb-1">Height</p>
                                         <p className="text-lg font-semibold text-green-600">{lastVisit.height} cm</p>
                                     </div>
-                                    {lastVisit.head_circumference && (
-                                        <div className="col-span-2 pt-2 border-t mt-2">
-                                            <p className="text-sm font-medium text-muted-foreground mb-1">Head Circumference</p>
-                                            <p className="text-lg font-semibold text-orange-600">{lastVisit.head_circumference} cm</p>
-                                        </div>
-                                    )}
+                                    <div>
+                                        <p className="text-sm font-medium text-muted-foreground mb-1">Head Circ.</p>
+                                        <p className="text-lg font-semibold text-orange-600">
+                                            {lastVisit.head_circumference ? `${lastVisit.head_circumference} cm` : '--'}
+                                        </p>
+                                    </div>
                                 </>
                             ) : (
-                                <div className="col-span-2 text-center text-muted-foreground italic text-sm py-2">
+                                <div className="col-span-3 text-center text-muted-foreground italic text-sm py-2">
                                     No vitals recorded
                                 </div>
                             )}

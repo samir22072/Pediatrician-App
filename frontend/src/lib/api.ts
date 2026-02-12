@@ -2,15 +2,35 @@ import axios from 'axios';
 
 const api = axios.create({
     baseURL: 'http://localhost:8000/api/',
-    timeout: 5000,
+    timeout: 30000,
     headers: {
         'Content-Type': 'application/json',
     },
 });
 
+// Add Request Interceptor for Token
+api.interceptors.request.use((config) => {
+    const token = localStorage.getItem('token');
+    if (token) {
+        config.headers.Authorization = `Token ${token}`;
+    }
+    return config;
+});
+
+export const AuthService = {
+    login: (credentials: any) => api.post('login/', credentials),
+    logout: () => {
+        localStorage.removeItem('token');
+        localStorage.removeItem('role');
+        localStorage.removeItem('username');
+        localStorage.removeItem('patientId');
+        window.location.href = '/login';
+    }
+};
+
 
 export const PatientService = {
-    list: () => api.post('patients/list/'),
+    list: () => api.get('patients/list/'),
     create: (data: any) => api.post('patients/create/', data),
     detail: (id: string) => api.post('patients/detail/', { id }),
 };
