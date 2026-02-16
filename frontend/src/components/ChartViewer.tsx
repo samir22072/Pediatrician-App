@@ -1,12 +1,13 @@
 'use client';
 import React, { useMemo } from 'react';
 import {
-    ComposedChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
+    ComposedChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Brush
 } from 'recharts';
 import { Visit } from '@/lib/types';
 import { BOYS_WEIGHT_AGE_Z, GIRLS_WEIGHT_AGE_Z, BOYS_HEIGHT_AGE_Z, GIRLS_HEIGHT_AGE_Z, BOYS_HEAD_CIRCUMFERENCE_AGE_Z, GIRLS_HEAD_CIRCUMFERENCE_AGE_Z } from '@/lib/growthStandards';
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { cn } from "@/lib/utils"
 
 interface ChartViewerProps {
@@ -14,17 +15,21 @@ interface ChartViewerProps {
     gender: 'Male' | 'Female';
 }
 
-const CustomTooltip = ({ active, payload, label }: any) => {
+const CustomTooltip = ({ active, payload, label, ageUnit }: any) => {
     if (active && payload && payload.length) {
         // Separate Patient data from Standards
         const patientPoint = payload.find((p: any) => p.name === 'Patient');
         const standards = payload.filter((p: any) => p.name !== 'Patient').sort((a: any, b: any) => b.value - a.value);
 
+        let ageLabel = `${Number(label).toFixed(1)} yrs`;
+        if (ageUnit === 'mo') ageLabel = `${Number(label).toFixed(1)} mos`;
+        if (ageUnit === 'dy') ageLabel = `${Number(label).toFixed(0)} days`;
+
         return (
             <Card className="p-4 shadow-xl border-border/50 bg-popover/95 backdrop-blur-sm min-w-[200px]">
                 <div className="border-b border-border pb-2 mb-2">
                     <p className="font-semibold text-muted-foreground text-sm">
-                        {`Age: ${Number(label).toFixed(1)} yrs`}
+                        {`Age: ${ageLabel}`}
                     </p>
                 </div>
 
@@ -61,6 +66,20 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 
 export default function ChartViewer({ visits, gender }: ChartViewerProps) {
     const [metric, setMetric] = React.useState<'weight' | 'height' | 'head_circumference'>('weight');
+    const [ageUnit, setAgeUnit] = React.useState<'yr' | 'mo' | 'dy'>('yr');
+    // Auto-scale age unit based on data
+    React.useEffect(() => {
+        if (!visits || visits.length === 0) return;
+        const maxAge = Math.max(...visits.map(v => v.age));
+
+        if (maxAge < 0.0833) { // Less than 1 month
+            setAgeUnit('dy');
+        } else if (maxAge < 1) { // Less than 1 year
+            setAgeUnit('mo');
+        } else {
+            setAgeUnit('yr');
+        }
+    }, [visits]);
 
     // Helper for Interpolation
     const interpolate = (age: number, standards: any[], key: string) => {
@@ -90,12 +109,16 @@ export default function ChartViewer({ visits, gender }: ChartViewerProps) {
             const val = Number(rawVal);
             if (isNaN(val)) return; // Allow 0, just strictly NaN check
 
-            // Approximate match for existing standard points (e.g. at birth Age 0)
-            const matchIndex = combined.findIndex(c => Math.abs(c.age - visitAge) < 0.01);
+            // Only merge with original standards (integers 0-5), NEVER overwrite another patient visit.
+            // Standards are always at the beginning of the array.
+            const standardsCount = standards.length;
+            const matchIndex = combined.slice(0, standardsCount).findIndex(c => Math.abs(c.age - visitAge) < 0.0001);
 
             if (matchIndex >= 0) {
+                // Matched a standard point (e.g. Birth)
                 combined[matchIndex][valueKey] = val;
             } else {
+                // Unique timestamp or non-standard age -> Append new point
                 combined.push({
                     age: visitAge,
                     [valueKey]: val,
@@ -115,7 +138,7 @@ export default function ChartViewer({ visits, gender }: ChartViewerProps) {
         })).sort((a, b) => a.age - b.age);
     };
 
-    const chartData = useMemo(() => {
+    const rawChartData = useMemo(() => {
         let standards: any[] = [];
         if (metric === 'weight') standards = (gender === 'Male' ? BOYS_WEIGHT_AGE_Z : GIRLS_WEIGHT_AGE_Z);
         else if (metric === 'height') standards = (gender === 'Male' ? BOYS_HEIGHT_AGE_Z : GIRLS_HEIGHT_AGE_Z);
@@ -129,8 +152,29 @@ export default function ChartViewer({ visits, gender }: ChartViewerProps) {
             [valueKey]: (v as any)[visitKey] // Cast to any to access dynamic key
         }));
 
-        return mergeData(standards, patientPoints, valueKey);
+        // Dynamically Filter Standards to "Zoom"
+        const maxPatientAge = patientPoints.length > 0 ? Math.max(...patientPoints.map(p => p.age)) : 0;
+        let ageLimit = 5; // Default full 5 years
+
+        if (patientPoints.length > 0) {
+            if (maxPatientAge < 0.25) ageLimit = 0.5; // Up to 6 months if baby is < 3mo
+            else if (maxPatientAge < 1) ageLimit = 1.2; // Up to 1.2y if baby < 1y
+            else if (maxPatientAge < 2) ageLimit = 2.5;
+            else ageLimit = Math.min(5, maxPatientAge + 1);
+        }
+
+        const filteredStandards = standards.filter(s => s.age <= ageLimit);
+
+        return mergeData(filteredStandards, patientPoints, valueKey);
     }, [visits, gender, metric]);
+
+    // Transform Data based on Age Unit
+    const displayData = useMemo(() => {
+        return rawChartData.map(d => ({
+            ...d,
+            age: ageUnit === 'dy' ? d.age * 365.25 : (ageUnit === 'mo' ? d.age * 12 : d.age)
+        }));
+    }, [rawChartData, ageUnit]);
 
     const renderChart = () => {
         let title = 'Weight-for-Age';
@@ -150,6 +194,10 @@ export default function ChartViewer({ visits, gender }: ChartViewerProps) {
             unit = 'Head Circ. (cm)';
         }
 
+        let xLabel = 'Age (Years)';
+        if (ageUnit === 'mo') xLabel = 'Age (Months)';
+        if (ageUnit === 'dy') xLabel = 'Age (Days)';
+
         return (
             <div className="relative overflow-hidden flex flex-col h-[450px] w-full">
                 <div className="flex items-center gap-2 mb-6 text-foreground">
@@ -159,7 +207,7 @@ export default function ChartViewer({ visits, gender }: ChartViewerProps) {
 
                 <div className="flex-1 w-full min-h-0">
                     <ResponsiveContainer width="100%" height="100%">
-                        <ComposedChart data={chartData} margin={{ top: 10, right: 30, left: 0, bottom: 20 }}>
+                        <ComposedChart data={displayData} margin={{ top: 10, right: 30, left: 0, bottom: 20 }}>
                             <defs>
                                 {/* Glow Filter for Patient Line */}
                                 <filter id={`glow-${dataKey}`} x="-50%" y="-50%" width="200%" height="200%">
@@ -177,7 +225,7 @@ export default function ChartViewer({ visits, gender }: ChartViewerProps) {
                                 dataKey="age"
                                 type="number"
                                 domain={[0, 'auto']}
-                                label={{ value: 'Age (Years)', position: 'insideBottom', offset: -15, fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
+                                label={{ value: xLabel, position: 'insideBottom', offset: -15, fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
                                 stroke="hsl(var(--muted-foreground))"
                                 stdDeviation={0}
                                 tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
@@ -189,7 +237,7 @@ export default function ChartViewer({ visits, gender }: ChartViewerProps) {
                                 tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
                                 domain={['auto', 'auto']}
                             />
-                            <Tooltip content={<CustomTooltip />} cursor={{ stroke: 'hsl(var(--muted-foreground))', strokeWidth: 1, strokeOpacity: 0.5 }} />
+                            <Tooltip content={<CustomTooltip ageUnit={ageUnit} />} cursor={{ stroke: 'hsl(var(--muted-foreground))', strokeWidth: 1, strokeOpacity: 0.5 }} />
                             <Legend wrapperStyle={{ paddingTop: '15px', fontSize: '12px' }} iconType="circle" />
 
                             {/* Standard Deviation Lines - Only if standards exist */}
@@ -212,6 +260,19 @@ export default function ChartViewer({ visits, gender }: ChartViewerProps) {
                                 style={{ filter: `url(#glow-${dataKey})` }}
                                 animationDuration={1500}
                             />
+
+                            <Brush
+                                dataKey="age"
+                                height={30}
+                                stroke="hsl(var(--primary))"
+                                fill="hsl(var(--background))"
+                                startIndex={0}
+                                tickFormatter={(val) => {
+                                    if (ageUnit === 'dy') return Math.round(val) + 'd';
+                                    if (ageUnit === 'mo') return Math.round(val) + 'm';
+                                    return Number(val).toFixed(1) + 'y';
+                                }}
+                            />
                         </ComposedChart>
                     </ResponsiveContainer>
                 </div>
@@ -221,7 +282,7 @@ export default function ChartViewer({ visits, gender }: ChartViewerProps) {
 
     return (
         <div className="animate-in fade-in zoom-in-95 duration-500 w-full h-full flex flex-col">
-            <div className="flex justify-center mb-6">
+            <div className="flex flex-col sm:flex-row justify-between items-center mb-6 gap-4">
                 <div className="bg-muted p-1 rounded-lg inline-flex">
                     <button
                         onClick={() => setMetric('weight')}
@@ -256,6 +317,21 @@ export default function ChartViewer({ visits, gender }: ChartViewerProps) {
                     >
                         Head Circ.
                     </button>
+                </div>
+
+                {/* Age Unit Selector */}
+                <div className="flex items-center gap-2">
+                    <span className="text-sm text-muted-foreground font-medium">Age Unit:</span>
+                    <Select value={ageUnit} onValueChange={(v: any) => setAgeUnit(v)}>
+                        <SelectTrigger className="w-[100px] h-9">
+                            <SelectValue placeholder="Unit" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="yr">Years</SelectItem>
+                            <SelectItem value="mo">Months</SelectItem>
+                            <SelectItem value="dy">Days</SelectItem>
+                        </SelectContent>
+                    </Select>
                 </div>
             </div>
             {renderChart()}

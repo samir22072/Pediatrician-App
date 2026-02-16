@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { PatientService, VisitService } from '@/lib/api';
+import { PatientService, VisitService, AttachmentService } from '@/lib/api';
 import { Patient, Visit } from '@/lib/types';
 import PatientDetails from '@/components/PatientDetails';
 import InputForm from '@/components/InputForm';
@@ -35,22 +35,43 @@ export default function PatientDetailsPage({ patientId, onBack }: PatientDetails
 
     const handleAddVisit = async (data: any) => {
         try {
-            await VisitService.create({ ...data, patient: patientId });
+            const { files, ...visitData } = data;
+            const res = await VisitService.create({ ...visitData, patient: patientId });
+
+            if (files && files.length > 0) {
+                // Upload attachments in parallel
+                await Promise.all(files.map((file: File) =>
+                    AttachmentService.create(res.data.id, file)
+                ));
+            }
+
             await fetchPatientDetails(patientId);
             setView('DETAILS');
         } catch (err) {
+            console.error(err);
             alert("Failed to add visit");
         }
     };
 
     const handleEditVisit = async (data: any) => {
         if (!editingVisit) return;
+        console.log("PatientDetailsPage: handleEditVisit called", data);
         try {
-            await VisitService.update({ ...data, id: editingVisit.id });
+            const { files, ...visitData } = data;
+            await VisitService.update({ ...visitData, id: editingVisit.id });
+
+            if (files && files.length > 0) {
+                console.log("Uploading files for edited visit:", files);
+                await Promise.all(files.map((file: File) =>
+                    AttachmentService.create(editingVisit.id, file)
+                ));
+            }
+
             await fetchPatientDetails(patientId);
             setEditingVisit(null);
             setView('DETAILS');
         } catch (err) {
+            console.error("Failed to update visit", err);
             alert("Failed to update visit");
         }
     };

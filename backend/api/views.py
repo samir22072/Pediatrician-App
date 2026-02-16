@@ -61,7 +61,7 @@ class PatientListView(APIView):
             # Patients can only see their own profile
             patients = Patient.objects.filter(user=request.user)
             
-        serializer = PatientSerializer(patients, many=True)
+        serializer = PatientSerializer(patients, many=True, context={'request': request})
         return Response(serializer.data)
 
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
@@ -107,7 +107,7 @@ class PatientDetailView(APIView):
         
         try:
             patient = Patient.objects.get(pk=patient_id)
-            serializer = PatientDetailSerializer(patient)
+            serializer = PatientDetailSerializer(patient, context={'request': request})
             return Response(serializer.data)
         except Patient.DoesNotExist:
             return Response({'error': 'Patient not found'}, status=status.HTTP_404_NOT_FOUND)
@@ -128,7 +128,7 @@ class VisitUpdateView(APIView):
 
         try:
             visit = Visit.objects.get(pk=visit_id)
-            serializer = VisitSerializer(visit, data=request.data, partial=True)
+            serializer = VisitSerializer(visit, data=request.data, partial=True, context={'request': request})
             if serializer.is_valid():
                 serializer.save()
                 return Response(serializer.data)
@@ -204,6 +204,12 @@ class AIChatView(APIView):
 
             system_prompt_content = ""
             
+            # Age Context
+            age_val = patient_stats.get('age')
+            age_prompt = ""
+            if age_val:
+                age_prompt = f"\n\n**Patient Age**: {age_val}. Adjust your questions to be appropriate for a child of this age."
+
             if mode == 'doctor':
                  system_prompt_content = f"""You are an efficient AI Medical Scribe assisting a physician.
                  
@@ -214,20 +220,34 @@ class AIChatView(APIView):
                  2. **No Triage**: Do NOT ask "How long has he had this?" or "Is he eating well?" unless the doctor explicitly asks you to remind them.
                  3. **Structure**: If the doctor dictates findings (e.g., "Otitis media right ear"), acknowledge simply: "Noted. Right OM."
                  4. **Assistance**: If the doctor asks for a differential or dosage, provide it concisely.
+                 {age_prompt}
                  {missing_prompt}
                  
                  Your output should be ready for pasting into an EMR or a brief confirmation of recorded data."""
             else:
                 # Default "Patient/Parent" Mode
+                # Count previous AI messages to limit questions
+                ai_msg_count = sum(1 for m in history if m.get('role') == 'ai' or m.get('sender') == 'ai')
+                
+                limit_prompt = ""
+                if ai_msg_count >= 10:
+                    limit_prompt = "\n\n**LIMIT REACHED**: You have asked enough questions. Do NOT ask any more. Provide a polite summary of what you have gathered so far and advise the parent to see the doctor."
+                else:
+                    limit_prompt = f"\n\n**Question Limit**: You have asked {ai_msg_count}/10 allowed questions. If you reach 10, you must stop and summarize."
+
                 system_prompt_content = f"""You are an expert AI Pediatric Triage Assistant. Your goal is to briefly gather key symptoms for the doctor.
 
                 Guidelines:
-                1. **Relevance is Key**: Ask only questions directly related to the reported symptoms. Do NOT follow a rigid checklist for unrelated issues (e.g., don't ask about diapers if the complaint is a scraped knee).
-                2. **Respect Uncertainty**: If the user says "I don't know", "unsure", or doesn't have the info, accept it immediately and move on. Do NOT press for details.
-                3. **Conciseness**: Keep your responses short (max 2 sentences).
-                4. **Pacing**: Ask only 1 question at a time.
+                1. **Goal**: You must gather all necessary information within a **maximum of 10 questions**. Be efficient.
+                2. **MANDATORY FIRST STEP**: If this is the BEGINNING of the conversation (you have not asked any questions yet) and the user has not provided vitals, you MUST ask for the patient's current **Height, Weight, and Head Circumference**. Do this IMMEDIATELY after acknowledging their first message. Do not proceed with detailed triage until you request these.
+                3. **Relevance is Key**: Ask only questions directly related to the reported symptoms. Do NOT follow a rigid checklist for unrelated issues.
+                4. **Respect Uncertainty**: If the user says "I don't know", accept it immediately and move on.
+                5. **Conciseness**: Keep your responses short (max 2 sentences).
+                6. **Pacing**: Ask only 1 question at a time.
+                {age_prompt}
                 {missing_prompt}
                 {vaccine_prompt}
+                {limit_prompt}
 
                 Be empathetic but efficient. Do NOT provide medical diagnoses or treatment advice. Just gather the facts."""
 
@@ -637,3 +657,38 @@ class ChatSessionCreateView(APIView):
 
         session = ChatSession.objects.create(patient=patient, name=name)
         return Response({'id': str(session.id), 'name': session.name, 'created_at': session.created_at}, status=status.HTTP_201_CREATED)
+
+from rest_framework.parsers import MultiPartParser, FormParser
+
+class AttachmentCreateView(APIView):
+    parser_classes = (MultiPartParser, FormParser)
+
+    def post(self, request):
+        print("DEBUG: Attachment Create Called")
+        print(f"DEBUG: Data: {request.data}")
+        print(f"DEBUG: Files: {request.FILES}")
+        
+        visit_id = request.data.get('visit_id')
+        if not visit_id:
+             print("DEBUG: Missing visit_id")
+             return Response({'error': 'Visit ID required'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            visit = Visit.objects.get(pk=visit_id)
+        except Visit.DoesNotExist:
+             print("DEBUG: Visit not found")
+             return Response({'error': 'Visit not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        file = request.FILES.get('file')
+        if not file:
+             print("DEBUG: No file provided")
+             return Response({'error': 'No file provided'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            attachment = Attachment.objects.create(visit=visit, file=file, name=file.name)
+            print(f"DEBUG: Attachment created: {attachment.id}")
+            serializer = AttachmentSerializer(attachment, context={'request': request})
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        except Exception as e:
+            print(f"DEBUG: Error creating attachment: {e}")
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

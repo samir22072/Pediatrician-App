@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, Mic, MicOff, Paperclip, Loader2, Bot, User, PanelLeft, Plus, MessageSquare, Copy, FileText, Sparkles, Check, Trash2 } from 'lucide-react';
+import { Send, Mic, MicOff, Paperclip, Loader2, Bot, User, PanelLeft, Plus, MessageSquare, Copy, FileText, Sparkles, Check, Trash2, Volume2, VolumeX } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
 import { AIService } from '@/lib/api';
 import { Message, Session } from '@/lib/types';
 import { Card } from "@/components/ui/card"
@@ -36,11 +37,15 @@ export default function AIChat({ patientName, patientId, patientStats, onTransfe
     const [showSidebar, setShowSidebar] = useState(true);
     const [isDoctorMode, setIsDoctorMode] = useState(false); // Toggle State
 
+    const [interimText, setInterimText] = useState(''); // New State for realtime feedback
+    const [userRole, setUserRole] = useState<string | null>(null);
+
     // Voice Recording State
     const [recordingTime, setRecordingTime] = useState(0);
     const [maxRecordingTime] = useState(120); // 2 minutes
     const recognitionRef = useRef<any>(null);
     const timerRef = useRef<NodeJS.Timeout | null>(null);
+    const isManuallyStopped = useRef(false); // Track if user clicked stop
 
 
 
@@ -59,6 +64,7 @@ export default function AIChat({ patientName, patientId, patientStats, onTransfe
         loadSessions();
         // Check local storage for role
         const role = localStorage.getItem('role');
+        setUserRole(role);
         if (role !== 'doctor') {
             setIsDoctorMode(false);
         }
@@ -179,6 +185,7 @@ export default function AIChat({ patientName, patientId, patientStats, onTransfe
                 structuredData: structured
             };
             setMessages(prev => [...prev, aiMsg]);
+            speak(reply); // Trigger TTS
 
         } catch (err) {
             setMessages(prev => [...prev, { id: Date.now().toString(), sender: 'ai', text: "Sorry, I encountered an error. Please try again." }]);
@@ -199,65 +206,88 @@ export default function AIChat({ patientName, patientId, patientStats, onTransfe
     const startListening = () => {
         if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
             const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-            recognitionRef.current = new SpeechRecognition();
-            recognitionRef.current.continuous = true;
-            recognitionRef.current.interimResults = true;
-            recognitionRef.current.lang = 'en-US';
 
-            recognitionRef.current.onstart = () => {
-                setIsListening(true);
-                setRecordingTime(0);
-                // Start Timer
-                timerRef.current = setInterval(() => {
-                    setRecordingTime(prev => {
-                        if (prev >= 119) { // nearly 120
-                            stopListening();
-                            return 120;
+            // Re-initialize if needed
+            if (!recognitionRef.current) {
+                recognitionRef.current = new SpeechRecognition();
+                recognitionRef.current.continuous = true;
+                recognitionRef.current.interimResults = true;
+                recognitionRef.current.lang = 'en-US';
+
+                recognitionRef.current.onstart = () => {
+                    setIsListening(true);
+                    isManuallyStopped.current = false;
+                    setRecordingTime(0);
+                    setInterimText('');
+                    // Start Timer
+                    if (timerRef.current) clearInterval(timerRef.current);
+                    timerRef.current = setInterval(() => {
+                        setRecordingTime(prev => {
+                            if (prev >= 119) {
+                                stopListening();
+                                return 120;
+                            }
+                            return prev + 1;
+                        });
+                    }, 1000);
+                };
+
+                recognitionRef.current.onresult = (event: any) => {
+                    let finalTranscript = '';
+                    let tempInterim = '';
+
+                    for (let i = event.resultIndex; i < event.results.length; ++i) {
+                        if (event.results[i].isFinal) {
+                            finalTranscript += event.results[i][0].transcript;
+                        } else {
+                            tempInterim += event.results[i][0].transcript;
                         }
-                        return prev + 1;
-                    });
-                }, 1000);
-            };
-
-            recognitionRef.current.onresult = (event: any) => {
-                let interimTranscript = '';
-                let finalTranscript = '';
-
-                for (let i = event.resultIndex; i < event.results.length; ++i) {
-                    if (event.results[i].isFinal) {
-                        finalTranscript += event.results[i][0].transcript;
-                    } else {
-                        interimTranscript += event.results[i][0].transcript;
                     }
-                }
 
-                if (finalTranscript) {
-                    setInputValue(prev => prev + (prev ? ' ' : '') + finalTranscript);
-                }
-            };
+                    if (finalTranscript) {
+                        setInputValue(prev => prev + (prev ? ' ' : '') + finalTranscript);
+                    }
+                    setInterimText(tempInterim); // Always update interim, regardless of final
+                };
 
-            recognitionRef.current.onerror = (event: any) => {
-                console.error("Speech recognition error", event.error);
-                stopListening();
-            };
+                recognitionRef.current.onerror = (event: any) => {
+                    console.error("Speech recognition error", event.error);
+                    if (event.error === 'not-allowed') {
+                        stopListening();
+                        alert("Microphone access denied.");
+                    }
+                    // Ignore 'no-speech' errors as they just mean silence
+                };
 
-            recognitionRef.current.onend = () => {
-                if (isListening) stopListening();
-            };
+                recognitionRef.current.onend = () => {
+                    // Auto-restart if not manually stopped (for continuous feel)
+                    // But prevent infinite loops if error is persistent
+                    setIsListening(false);
+                    setInterimText('');
+                    if (timerRef.current) clearInterval(timerRef.current);
 
-            recognitionRef.current.start();
+                    if (!isManuallyStopped.current) {
+                        // Optional: Debounce restart or just let it stop to avoid aggressive behavior
+                        // For now, let's just stop to be safe, but UI reflects it.
+                    }
+                };
+            }
+
+            try {
+                recognitionRef.current.start();
+            } catch (e) {
+                console.warn("Recognition already started");
+            }
+
         } else {
-            // Fallback / Mock
-            alert("Browser does not support speech recognition. Using mock mode.");
-            setIsListening(true);
-            setTimeout(() => {
-                setInputValue(prev => prev + (prev ? ' ' : '') + (isDoctorMode ? " Patient reports 3 days of fever..." : " My child has a fever..."));
-                setIsListening(false);
-            }, 2000);
+            alert("Voice recognition is not supported in this browser.");
         }
     };
 
     const stopListening = () => {
+        isManuallyStopped.current = true;
+        setIsListening(false);
+        setInterimText('');
         if (recognitionRef.current) {
             recognitionRef.current.stop();
             recognitionRef.current = null;
@@ -268,6 +298,32 @@ export default function AIChat({ patientName, patientId, patientStats, onTransfe
         }
         setIsListening(false);
     };
+
+    // --- Text to Speech Logic ---
+    const [isTTSActive, setIsTTSActive] = useState(false);
+
+    const speak = (text: string) => {
+        if (!isTTSActive || !window.speechSynthesis) return;
+
+        // Cancel any current speech
+        window.speechSynthesis.cancel();
+
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = 'en-US';
+        // Pick a nice voice if available
+        const voices = window.speechSynthesis.getVoices();
+        const preferredVoice = voices.find(v => v.name.includes("Google US English") || v.name.includes("Samantha"));
+        if (preferredVoice) utterance.voice = preferredVoice;
+
+        window.speechSynthesis.speak(utterance);
+    };
+
+    // Stop speech when unmounting or switching capability
+    useEffect(() => {
+        return () => {
+            if (window.speechSynthesis) window.speechSynthesis.cancel();
+        };
+    }, []);
 
     const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
         if (e.key === 'Enter' && !e.shiftKey) {
@@ -384,7 +440,30 @@ export default function AIChat({ patientName, patientId, patientStats, onTransfe
                     </div>
                 </div>
 
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-2">
+                    <TooltipProvider>
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className={cn("h-8 w-8", isTTSActive ? "text-primary" : "text-muted-foreground")}
+                                    onClick={() => {
+                                        if (isTTSActive) window.speechSynthesis.cancel();
+                                        setIsTTSActive(!isTTSActive);
+                                    }}
+                                >
+                                    {isTTSActive ? <Volume2 size={18} /> : <VolumeX size={18} />}
+                                </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                                {isTTSActive ? "Mute Text-to-Speech" : "Enable Text-to-Speech"}
+                            </TooltipContent>
+                        </Tooltip>
+                    </TooltipProvider>
+
+
+
                     {/* Generate Report Button - Visible mostly in Doctor Mode or if content exists */}
                     {messages.length > 0 && (
                         <TooltipProvider>
@@ -410,7 +489,7 @@ export default function AIChat({ patientName, patientId, patientStats, onTransfe
                     )}
 
                     {/* Only show switch if user is a doctor */}
-                    {typeof window !== 'undefined' && localStorage.getItem('role') === 'doctor' && (
+                    {userRole === 'doctor' && (
                         <TooltipProvider>
                             <Tooltip>
                                 <TooltipTrigger asChild>
@@ -508,7 +587,13 @@ export default function AIChat({ patientName, patientId, patientStats, onTransfe
                                                 : "bg-muted/80 text-foreground rounded-tl-none border border-border"
                                         )}
                                     >
-                                        <div className="whitespace-pre-wrap">{msg.text}</div>
+                                        {msg.sender === 'ai' ? (
+                                            <div className="prose prose-sm dark:prose-invert max-w-none text-sm leading-relaxed break-words">
+                                                <ReactMarkdown>{msg.text}</ReactMarkdown>
+                                            </div>
+                                        ) : (
+                                            <div className="whitespace-pre-wrap">{msg.text}</div>
+                                        )}
 
                                         {/* Action Buttons for AI messages */}
                                         {msg.sender === 'ai' && (

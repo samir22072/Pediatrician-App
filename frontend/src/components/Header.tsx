@@ -1,8 +1,12 @@
 'use client';
 import React from 'react';
 import { Activity } from 'lucide-react';
+import { usePathname } from 'next/navigation';
 
 export default function Header() {
+    const pathname = usePathname();
+    const isLoginPage = pathname === '/login';
+
     return (
         <header style={{
             position: 'sticky',
@@ -50,28 +54,30 @@ export default function Header() {
             {/* Action Portal Target */}
             <div id="navbar-actions" style={{ marginLeft: 'auto', display: 'flex', gap: '1rem', alignItems: 'center' }}></div>
 
-            <button
-                onClick={() => {
-                    import('@/lib/api').then(({ AuthService }) => {
-                        AuthService.logout();
-                    });
-                }}
-                style={{
-                    padding: '0.5rem 1rem',
-                    borderRadius: '0.5rem',
-                    backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                    color: '#ef4444',
-                    border: '1px solid rgba(239, 68, 68, 0.2)',
-                    cursor: 'pointer',
-                    fontSize: '0.875rem',
-                    fontWeight: 600,
-                    transition: 'all 0.2s ease',
-                    marginLeft: '1rem'
-                }}
-                className="hover:bg-red-500/20"
-            >
-                Logout
-            </button>
+            {!isLoginPage && (
+                <button
+                    onClick={() => {
+                        import('@/lib/api').then(({ AuthService }) => {
+                            AuthService.logout();
+                        });
+                    }}
+                    style={{
+                        padding: '0.5rem 1rem',
+                        borderRadius: '0.5rem',
+                        backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                        color: '#ef4444',
+                        border: '1px solid rgba(239, 68, 68, 0.2)',
+                        cursor: 'pointer',
+                        fontSize: '0.875rem',
+                        fontWeight: 600,
+                        transition: 'all 0.2s ease',
+                        marginLeft: '1rem'
+                    }}
+                    className="hover:bg-red-500/20"
+                >
+                    Logout
+                </button>
+            )}
         </header>
     );
 }

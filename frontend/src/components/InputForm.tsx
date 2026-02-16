@@ -46,7 +46,7 @@ export default function InputForm({ onCancel, onSubmit, mode = 'new-patient', in
         prescription: initialData?.prescription || '',
         followUpDate: initialData?.follow_up_date || '',
 
-        attachments: [] as Attachment[]
+        attachments: initialData?.attachments || [] as Attachment[]
     });
 
     const calculateDetailedAge = (dobString: string, dateString: string) => {
@@ -69,7 +69,7 @@ export default function InputForm({ onCancel, onSubmit, mode = 'new-patient', in
         }
 
         const diffTime = Math.abs(visitDate.getTime() - dob.getTime());
-        const ageFloat = (diffTime / (1000 * 60 * 60 * 24 * 365.25)).toFixed(2);
+        const ageFloat = (diffTime / (1000 * 60 * 60 * 24 * 365.25)).toFixed(5);
 
         return {
             display: `${years}y ${months}m ${days}d`,
@@ -122,10 +122,27 @@ export default function InputForm({ onCancel, onSubmit, mode = 'new-patient', in
         setFormData(prev => ({ ...prev, vaccines: formData.vaccines.filter((v: string) => v !== vaccine) }));
     };
 
+    const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+
+    const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files) {
+            setSelectedFiles(prev => [...prev, ...Array.from(e.target.files!)]);
+        }
+    };
+
+    const removeFile = (index: number) => {
+        setSelectedFiles(prev => prev.filter((_, i) => i !== index));
+    };
+
     const handleSubmit = (e: FormEvent) => {
         e.preventDefault();
 
+        const submitData: any = {
+            // ... existing fields
+        };
+
         if (mode === 'new-patient') {
+            // ... existing new patient logic
             const birthDate = new Date(formData.dob);
             const today = new Date();
             const ageInYears = (today.getTime() - birthDate.getTime()) / (1000 * 60 * 60 * 24 * 365.25);
@@ -139,7 +156,7 @@ export default function InputForm({ onCancel, onSubmit, mode = 'new-patient', in
                 initial_weight: formData.weight ? Number(formData.weight) : null,
                 initial_height: formData.height ? Number(formData.height) : null,
                 initial_head_circumference: formData.headCircumference ? Number(formData.headCircumference) : null,
-                calculated_age: ageInYears > 0 ? Number(ageInYears.toFixed(2)) : 0
+                calculated_age: ageInYears > 0 ? Number(ageInYears.toFixed(5)) : 0
             });
         } else {
             onSubmit({
@@ -147,21 +164,22 @@ export default function InputForm({ onCancel, onSubmit, mode = 'new-patient', in
                 age: Number(formData.age),
                 weight: Number(formData.weight),
                 height: Number(formData.height),
-                // Optional Vitals
                 temperature: formData.temperature ? Number(formData.temperature) : null,
                 blood_pressure: formData.bloodPressure || null,
                 heart_rate: formData.heartRate ? Number(formData.heartRate) : null,
                 head_circumference: formData.headCircumference ? Number(formData.headCircumference) : null,
-
                 visit_type: Array.isArray(formData.visitType) ? formData.visitType.join(', ') : formData.visitType,
                 vaccines: formData.vaccines,
                 diagnosis: formData.diagnosis,
                 notes: formData.notes,
-
                 prescription: formData.prescription || null,
                 follow_up_date: formData.followUpDate || null,
-
-                attachments: formData.attachments
+                attachments: formData.attachments,
+                files: selectedFiles // Pass active files
+            });
+            console.log("InputForm: Submitted data", {
+                visitDate: formData.visitDate,
+                files: selectedFiles
             });
         }
     };
@@ -427,6 +445,62 @@ export default function InputForm({ onCancel, onSubmit, mode = 'new-patient', in
                                         </div>
                                     </div>
                                 </div>
+
+                                {/* Attachments Section */}
+                                <div className="space-y-2 pt-4 border-t">
+                                    <Label>Attachments</Label>
+
+                                    {/* Existing Attachments */}
+                                    {formData.attachments && formData.attachments.length > 0 && (
+                                        <div className="space-y-2 mb-4">
+                                            <Label className="text-xs text-muted-foreground font-semibold">Current Attachments</Label>
+                                            <div className="grid gap-2">
+                                                {formData.attachments.map((att, idx) => (
+                                                    <div key={idx} className="flex justify-between items-center text-sm p-2 bg-secondary/30 rounded-md border border-border/50">
+                                                        <a
+                                                            href={att.file}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            download={att.name || true}
+                                                            className="truncate max-w-[200px] flex items-center gap-2 hover:text-primary transition-colors"
+                                                        >
+                                                            <span className="text-xs">📎</span>
+                                                            {att.name || `Attachment ${idx + 1}`}
+                                                        </a>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    <div className="flex items-center gap-2">
+                                        <Input
+                                            type="file"
+                                            multiple
+                                            onChange={handleFileChange}
+                                            className="hidden"
+                                            id="file-upload"
+                                        />
+                                        <Button type="button" variant="secondary" size="sm" onClick={() => document.getElementById('file-upload')?.click()}>
+                                            {formData.attachments.length > 0 ? "Add More Files" : "Upload Attachments"}
+                                        </Button>
+                                        <span className="text-xs text-muted-foreground">{selectedFiles.length} new file(s) selected</span>
+                                    </div>
+                                    {selectedFiles.length > 0 && (
+                                        <div className="space-y-1 mt-2">
+                                            <Label className="text-xs text-muted-foreground font-semibold">New Uploads</Label>
+                                            {selectedFiles.map((file, idx) => (
+                                                <div key={idx} className="flex justify-between items-center text-sm p-2 bg-muted/50 rounded-md">
+                                                    <span className="truncate max-w-[200px]">{file.name}</span>
+                                                    <button type="button" onClick={() => removeFile(idx)} className="text-destructive hover:font-bold">
+                                                        <X size={14} />
+                                                    </button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+
                             </div>
                         </div>
                     )}

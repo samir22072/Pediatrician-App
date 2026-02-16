@@ -50,4 +50,24 @@ export const AIService = {
     deleteSession: (data: any) => api.post('ai/sessions/delete/', data),
 };
 
+export const AttachmentService = {
+    create: (visitId: string, file: File) => {
+        console.log("AttachmentService.create called", visitId, file);
+        const formData = new FormData();
+        formData.append('visit_id', visitId);
+        formData.append('file', file);
+
+        // Log FormData entries for debugging
+        for (let [key, value] of formData.entries()) {
+            console.log(`FormData: ${key} =`, value);
+        }
+
+        return api.post('attachments/create/', formData, {
+            headers: {
+                'Content-Type': 'multipart/form-data',
+            },
+        });
+    }
+};
+
 export default api;

@@ -195,6 +195,24 @@ export default function PatientDetails({ patient, onBack, onAddVisit, onEditVisi
                                                                     {visit.notes}
                                                                 </p>
                                                             )}
+                                                            {visit.attachments && visit.attachments.length > 0 && (
+                                                                <div className="mt-3 flex flex-wrap gap-2">
+                                                                    {visit.attachments.map((att, idx) => (
+                                                                        <a
+                                                                            key={idx}
+                                                                            href={att.file}
+                                                                            target="_blank"
+                                                                            rel="noopener noreferrer"
+                                                                            download={att.name || true}
+                                                                            className="text-xs flex items-center gap-1 bg-secondary/50 px-2 py-1 rounded-md hover:bg-secondary transition-colors text-primary"
+                                                                            onClick={(e) => e.stopPropagation()}
+                                                                        >
+                                                                            <ClipboardList size={12} />
+                                                                            {att.name || 'Attachment'}
+                                                                        </a>
+                                                                    ))}
+                                                                </div>
+                                                            )}
                                                         </div>
                                                         <div className="flex gap-1">
                                                             <Button
