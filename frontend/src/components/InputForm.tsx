@@ -93,6 +93,8 @@ export default function InputForm({ onCancel, onSubmit, mode = 'new-patient', in
     }, [formData.visitDate, patientDOB, mode]);
 
 
+
+
     const handleChange = (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
         const { name, value } = e.target;
         setFormData(prev => ({ ...prev, [name]: value }));

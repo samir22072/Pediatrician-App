@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { PatientService, VisitService, AttachmentService } from '@/lib/api';
+import { PatientService, VisitService, AttachmentService, AIService } from '@/lib/api';
 import { Patient, Visit } from '@/lib/types';
 import PatientDetails from '@/components/PatientDetails';
 import InputForm from '@/components/InputForm';
@@ -14,6 +14,7 @@ export default function PatientDetailsPage({ patientId, onBack }: PatientDetails
     const [view, setView] = useState<'DETAILS' | 'ADD_VISIT' | 'EDIT_VISIT'>('DETAILS');
     const [editingVisit, setEditingVisit] = useState<Visit | null>(null);
     const [aiPrefill, setAiPrefill] = useState<any>(null); // State for AI context
+    const [currentSessionId, setCurrentSessionId] = useState<string | null>(null); // Store session ID for linking attachments
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
@@ -36,17 +37,23 @@ export default function PatientDetailsPage({ patientId, onBack }: PatientDetails
     const handleAddVisit = async (data: any) => {
         try {
             const { files, ...visitData } = data;
-            const res = await VisitService.create({ ...visitData, patient: patientId });
+            // Include sessionId to link attachments
+            const res = await VisitService.create({
+                ...visitData,
+                patient: patientId,
+                sessionId: currentSessionId
+            });
 
             if (files && files.length > 0) {
                 // Upload attachments in parallel
                 await Promise.all(files.map((file: File) =>
-                    AttachmentService.create(res.data.id, file)
+                    AttachmentService.create({ visitId: res.data.id, file })
                 ));
             }
 
             await fetchPatientDetails(patientId);
             setView('DETAILS');
+            setCurrentSessionId(null); // Reset session ID after use
         } catch (err) {
             console.error(err);
             alert("Failed to add visit");
@@ -63,7 +70,7 @@ export default function PatientDetailsPage({ patientId, onBack }: PatientDetails
             if (files && files.length > 0) {
                 console.log("Uploading files for edited visit:", files);
                 await Promise.all(files.map((file: File) =>
-                    AttachmentService.create(editingVisit.id, file)
+                    AttachmentService.create({ visitId: editingVisit.id, file })
                 ));
             }
 
@@ -101,10 +108,12 @@ export default function PatientDetailsPage({ patientId, onBack }: PatientDetails
             <PatientDetails
                 patient={patient}
                 onBack={onBack}
-                onAddVisit={() => setView('ADD_VISIT')}
+                onAddVisit={() => { setCurrentSessionId(null); setView('ADD_VISIT'); }}
                 onEditVisit={(v) => { setEditingVisit(v); setView('EDIT_VISIT'); }}
                 onTransferToVisit={(summary) => {
-                    setAiPrefill(summary);
+                    const { sessionId, ...rest } = summary;
+                    if (sessionId) setCurrentSessionId(sessionId);
+                    setAiPrefill(rest);
                     setEditingVisit(null);
                     setView('ADD_VISIT');
                 }}
@@ -116,19 +125,29 @@ export default function PatientDetailsPage({ patientId, onBack }: PatientDetails
                         mode="add-visit"
                         onSubmit={handleAddVisit}
                         onCancel={() => { setView('DETAILS'); setAiPrefill(null); }}
-                        initialData={aiPrefill || (patient.visits && patient.visits.length > 0 ? {
-                            weight: patient.visits[patient.visits.length - 1].weight,
-                            height: patient.visits[patient.visits.length - 1].height,
-                            age: patient.dob ? (() => {
-                                const diff = new Date().getTime() - new Date(patient.dob).getTime();
-                                return (diff / (1000 * 60 * 60 * 24 * 365.25)).toFixed(2);
-                            })() : ''
-                        } : {
-                            age: patient.dob ? (() => {
-                                const diff = new Date().getTime() - new Date(patient.dob).getTime();
-                                return (diff / (1000 * 60 * 60 * 24 * 365.25)).toFixed(2);
-                            })() : ''
-                        })}
+                        initialData={(() => {
+                            const lastVisit = patient.visits && patient.visits.length > 0 ? patient.visits[patient.visits.length - 1] : null;
+                            const prefill = aiPrefill || {};
+
+                            // Helper to prefer AI value if valid, else fallback
+                            const getVal = (key: string, fallback: any) => {
+                                const aiVal = prefill[key];
+                                // Check for non-null, non-undefined, non-empty string. Allow 0.
+                                if (aiVal !== null && aiVal !== undefined && aiVal !== '') return aiVal;
+                                return fallback;
+                            };
+
+                            return {
+                                ...prefill, // Keep other AI fields
+                                weight: getVal('weight', lastVisit?.weight || ''),
+                                height: getVal('height', lastVisit?.height || ''),
+                                head_circumference: getVal('head_circumference', lastVisit?.head_circumference || ''),
+                                age: patient.dob ? (() => {
+                                    const diff = new Date().getTime() - new Date(patient.dob).getTime();
+                                    return (diff / (1000 * 60 * 60 * 24 * 365.25)).toFixed(2);
+                                })() : ''
+                            };
+                        })()}
                         patientDOB={patient.dob}
                     />
                 </Modal>

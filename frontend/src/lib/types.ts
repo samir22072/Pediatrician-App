@@ -5,6 +5,13 @@ export interface Attachment {
     type?: string;
     data?: string; // base64 content for upload
     uploaded_at?: string;
+    scan_analysis?: {
+        id: string;
+        modality: string;
+        findings: string;
+        impression: string;
+        analyzed_at: string;
+    };
 }
 
 export interface Vaccination {
@@ -56,6 +63,7 @@ export interface Message {
     text: string;
     timestamp?: string;
     structuredData?: any;
+    imageUrl?: string;
 }
 
 export interface Session {

@@ -43,3 +43,14 @@ class ChatMessageAdmin(admin.ModelAdmin):
 
     def short_text(self, obj):
         return obj.text[:50]
+
+from .models import ScanResult
+
+@admin.register(ScanResult)
+class ScanResultAdmin(admin.ModelAdmin):
+    list_display = ('id', 'attachment', 'modality', 'short_impression')
+    list_filter = ('modality',)
+    search_fields = ('findings', 'impression', 'modality')
+
+    def short_impression(self, obj):
+        return obj.impression[:50] if obj.impression else ''

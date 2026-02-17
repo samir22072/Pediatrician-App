@@ -85,7 +85,8 @@ class Vaccination(models.Model):
 
 class Attachment(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    visit = models.ForeignKey(Visit, related_name='attachments', on_delete=models.CASCADE)
+    visit = models.ForeignKey(Visit, related_name='attachments', on_delete=models.CASCADE, null=True, blank=True)
+    session = models.ForeignKey(ChatSession, related_name='attachments', on_delete=models.SET_NULL, null=True, blank=True)
     file = models.FileField(upload_to='attachments/')
     name = models.CharField(max_length=255, blank=True)
     uploaded_at = models.DateTimeField(auto_now_add=True)
@@ -97,6 +98,17 @@ class Attachment(models.Model):
 
     def __str__(self):
         return self.name
+
+class ScanResult(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    attachment = models.OneToOneField(Attachment, related_name='scan_analysis', on_delete=models.CASCADE)
+    modality = models.CharField(max_length=50, blank=True, help_text="X-Ray, MRI, CT, etc.")
+    findings = models.TextField(blank=True, help_text="Detailed findings from the scan.")
+    impression = models.TextField(blank=True, help_text="Overall impression or conclusion.")
+    analyzed_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Analysis for {self.attachment.name}"
 
 # --- Signals ---
 from django.db.models.signals import post_save

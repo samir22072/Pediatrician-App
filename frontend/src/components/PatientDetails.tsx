@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Patient, Visit } from '@/lib/types';
-import { ArrowLeft, Plus, Edit, Activity, Syringe, ClipboardList, Sparkles } from 'lucide-react';
+import { ArrowLeft, Plus, Edit, Activity, Syringe, ClipboardList, Sparkles, Scan } from 'lucide-react';
 import AIChat from './AIChat';
 import ChartViewer from './ChartViewer';
 import VaccinationChecklist from './VaccinationChecklist';
@@ -125,12 +125,15 @@ export default function PatientDetails({ patient, onBack, onAddVisit, onEditVisi
                 <div className="min-h-0 flex flex-col">
                     <Tabs defaultValue="ai_triage" className="flex flex-col h-full">
                         <div className="flex-none mb-4">
-                            <TabsList className="grid w-full grid-cols-4 max-w-2xl">
+                            <TabsList className="grid w-full grid-cols-5 max-w-3xl">
                                 <TabsTrigger value="ai_triage" className="gap-2">
                                     <Sparkles size={16} /> AI Triage
                                 </TabsTrigger>
                                 <TabsTrigger value="charts" className="gap-2">
                                     <Activity size={16} /> Charts
+                                </TabsTrigger>
+                                <TabsTrigger value="scan_findings" className="gap-2">
+                                    <Scan size={16} /> Scans
                                 </TabsTrigger>
                                 <TabsTrigger value="vaccinations" className="gap-2">
                                     <Syringe size={16} /> Vaccines
@@ -155,6 +158,56 @@ export default function PatientDetails({ patient, onBack, onAddVisit, onEditVisi
                                 <Card className="p-4 h-full">
                                     <ChartViewer visits={visits} gender={patient.gender} />
                                 </Card>
+                            </TabsContent>
+
+                            <TabsContent value="scan_findings" className="h-full m-0 overflow-y-auto">
+                                <ScrollArea className="h-full pr-4">
+                                    {visits.flatMap(v => v.attachments).filter(a => a.scan_analysis).length === 0 ? (
+                                        <div className="flex flex-col items-center justify-center p-12 text-muted-foreground border-2 border-dashed rounded-lg h-full">
+                                            <Scan size={48} className="mb-4 opacity-20" />
+                                            <p>No scan analysis results found.</p>
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-4">
+                                            {visits.flatMap(v => v.attachments).filter(a => a.scan_analysis).map(att => (
+                                                <Card key={att.id || Math.random()}>
+                                                    <CardContent className="p-6">
+                                                        <div className="flex items-start justify-between mb-4">
+                                                            <div className="flex items-center gap-3">
+                                                                <div className="h-12 w-12 bg-purple-100 rounded-lg flex items-center justify-center text-purple-600 dark:bg-purple-900/40 dark:text-purple-300">
+                                                                    <Scan size={24} />
+                                                                </div>
+                                                                <div>
+                                                                    <h3 className="font-semibold text-lg">{att.scan_analysis?.modality || "Medical Scan"}</h3>
+                                                                    <p className="text-sm text-muted-foreground">Analyzed on {att.scan_analysis?.analyzed_at ? new Date(att.scan_analysis.analyzed_at).toLocaleDateString() : 'Unknown Date'}</p>
+                                                                </div>
+                                                            </div>
+                                                            <Badge variant="outline">{visits.find(v => v.attachments.includes(att))?.date}</Badge>
+                                                        </div>
+
+                                                        <div className="space-y-4 mt-2">
+                                                            <div className="bg-muted/30 p-3 rounded-md">
+                                                                <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2">Findings</h4>
+                                                                <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">{att.scan_analysis?.findings}</p>
+                                                            </div>
+                                                            <div className="bg-blue-500/10 p-3 rounded-md border border-blue-500/20">
+                                                                <h4 className="text-xs font-bold uppercase tracking-wider text-blue-400 mb-2">Impression</h4>
+                                                                <p className="text-sm text-foreground font-medium">{att.scan_analysis?.impression}</p>
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="mt-4 pt-4 border-t flex justify-between items-center">
+                                                            <span className="text-xs text-muted-foreground italic">File: {att.name}</span>
+                                                            <a href={att.file} target="_blank" rel="noopener noreferrer" className="text-sm text-primary hover:underline flex items-center gap-1">
+                                                                View Original Image <ArrowLeft size={12} className="rotate-180" />
+                                                            </a>
+                                                        </div>
+                                                    </CardContent>
+                                                </Card>
+                                            ))}
+                                        </div>
+                                    )}
+                                </ScrollArea>
                             </TabsContent>
 
                             <TabsContent value="vaccinations" className="h-full m-0 overflow-y-auto">

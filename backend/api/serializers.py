@@ -1,11 +1,18 @@
 from rest_framework import serializers
-from .models import Patient, Visit, Attachment, Vaccination
+from .models import Patient, Visit, Attachment, Vaccination, ScanResult
+
+class ScanResultSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ScanResult
+        fields = ['id', 'modality', 'findings', 'impression', 'analyzed_at']
 
 class AttachmentSerializer(serializers.ModelSerializer):
+    scan_analysis = ScanResultSerializer(read_only=True)
     class Meta:
         model = Attachment
-        fields = ['id', 'visit', 'file', 'name', 'uploaded_at']
+        fields = ['id', 'visit', 'session', 'file', 'name', 'uploaded_at', 'scan_analysis']
         read_only_fields = ['name', 'uploaded_at']
+        extra_kwargs = {'visit': {'required': False, 'allow_null': True}}
 
 class VaccinationSerializer(serializers.ModelSerializer):
     class Meta:

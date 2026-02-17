@@ -17,7 +17,12 @@ from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from langchain_core.prompts import PromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 
-from .models import Patient, Visit, Attachment
+import json
+import base64
+import re
+import random
+from datetime import date
+from .models import Patient, Visit, Attachment, ChatSession, ChatMessage, Vaccination, ScanResult
 from .serializers import (
     PatientSerializer, PatientDetailSerializer, 
     VisitSerializer, AttachmentSerializer
@@ -79,7 +84,6 @@ class PatientCreateView(APIView):
                 username = patient.name.lower().replace(" ", "")
                 # Simple uniquifier if needed
                 if User.objects.filter(username=username).exists():
-                    import random
                     username = f"{username}{random.randint(100, 999)}"
                 
                 user = User.objects.create_user(username=username, password='password123')
@@ -116,7 +120,22 @@ class VisitCreateView(APIView):
     def post(self, request):
         serializer = VisitSerializer(data=request.data)
         if serializer.is_valid():
-            serializer.save()
+            visit = serializer.save()
+            
+            # --- Link Session Attachments ---
+            session_id = request.data.get('sessionId') # Note camelCase from frontend usually
+            
+            if session_id:
+                try:
+                    session = ChatSession.objects.get(pk=session_id)
+                    # Find attachments for this session that have NO visit
+                    attachments = Attachment.objects.filter(session=session, visit__isnull=True)
+                    
+                    if attachments.exists():
+                        updated = attachments.update(visit=visit)
+                except Exception as e:
+                    print(f"Error linking session attachments: {e}")
+
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -160,11 +179,13 @@ class AIChatView(APIView):
 
         history = request.data.get('history', [])
         current_message = request.data.get('message', '')
+        if not current_message:
+            return Response({'error': 'Message content is required'}, status=status.HTTP_400_BAD_REQUEST)
         
         try:
             # Initialize LangChain Chat Model
             chat = ChatGoogleGenerativeAI(
-                model="gemini-flash-latest",
+                model="gemini-2.5-flash-lite",
                 google_api_key=API_KEY,
                 temperature=0.7
             )
@@ -184,9 +205,6 @@ class AIChatView(APIView):
             patient_id = request.data.get('patientId')
             vaccine_prompt = ""
             if patient_id:
-                from .models import Vaccination
-                from datetime import date
-                
                 pending_vax_qs = Vaccination.objects.filter(
                     patient_id=patient_id, 
                     status='Pending', 
@@ -219,7 +237,8 @@ class AIChatView(APIView):
                  1. **Professional Tone**: Use standard medical terminology. Be brief.
                  2. **No Triage**: Do NOT ask "How long has he had this?" or "Is he eating well?" unless the doctor explicitly asks you to remind them.
                  3. **Structure**: If the doctor dictates findings (e.g., "Otitis media right ear"), acknowledge simply: "Noted. Right OM."
-                 4. **Assistance**: If the doctor asks for a differential or dosage, provide it concisely.
+                 4. **Comprehensive Capture**: Actively listen for and record Vitals (Temp, HR, BP), Treatment Plan (Prescription), and Follow-up Date.
+                 5. **Assistance**: If the doctor asks for a differential or dosage, provide it concisely.
                  {age_prompt}
                  {missing_prompt}
                  
@@ -240,16 +259,48 @@ class AIChatView(APIView):
                 Guidelines:
                 1. **Goal**: You must gather all necessary information within a **maximum of 10 questions**. Be efficient.
                 2. **MANDATORY FIRST STEP**: If this is the BEGINNING of the conversation (you have not asked any questions yet) and the user has not provided vitals, you MUST ask for the patient's current **Height, Weight, and Head Circumference**. Do this IMMEDIATELY after acknowledging their first message. Do not proceed with detailed triage until you request these.
-                3. **Relevance is Key**: Ask only questions directly related to the reported symptoms. Do NOT follow a rigid checklist for unrelated issues.
-                4. **Respect Uncertainty**: If the user says "I don't know", accept it immediately and move on.
-                5. **Conciseness**: Keep your responses short (max 2 sentences).
-                6. **Pacing**: Ask only 1 question at a time.
+                3. **Medication Check**: You MUST ask if any medications (e.g., Tylenol, Ibuprofen) have already been administered.
+                4. **Relevance is Key**: Ask only questions directly related to the reported symptoms. Do NOT follow a rigid checklist for unrelated issues.
+                5. **Respect Uncertainty**: If the user says "I don't know", accept it immediately and move on.
+                6. **Conciseness**: Keep your responses short (max 2 sentences).
+                7. **Pacing**: Ask only 1 question at a time.
                 {age_prompt}
                 {missing_prompt}
                 {vaccine_prompt}
                 {limit_prompt}
 
                 Be empathetic but efficient. Do NOT provide medical diagnoses or treatment advice. Just gather the facts."""
+
+            # Handle Attachment Analysis
+            attachment_id = request.data.get('attachmentId')
+            analysis_context = ""
+            structured_findings = None
+            
+            if attachment_id:
+                try:
+                    attachment = Attachment.objects.get(id=attachment_id)
+                    # Analyze
+                    analysis_result = analyze_scan_helper(attachment)
+                    
+                    if analysis_result:
+                        analysis_context = f"""
+                        \n\n**ATTACHED SCAN ANALYSIS**:
+                        The user has uploaded a medical scan.
+                        **Modality**: {analysis_result.get('modality')}
+                        **Findings**: {analysis_result.get('findings')}
+                        **Impression**: {analysis_result.get('impression')}
+                        
+                        **INSTRUCTION**: Review these findings. 
+                        1. Explain the findings to the user in simple terms. 
+                        2. If the prompt is just describing the image, confirm the findings.
+                        3. If there are concerning findings, advise seeing a specialist.
+                        """
+                        structured_findings = analysis_result
+                except Exception as e:
+                    print(f"Attachment Context Error: {e}")
+            
+            # Append validation prompt to system prompt
+            system_prompt_content += analysis_context
 
             # Construct Message History
             messages = [
@@ -267,7 +318,6 @@ class AIChatView(APIView):
             
             # Save User Message to DB
             if patient_id:
-                from .models import ChatMessage, ChatSession
                 try:
                     patient_obj = Patient.objects.get(pk=patient_id)
                     
@@ -304,7 +354,6 @@ class AIChatView(APIView):
             # If content is a string that looks like a JSON list, try to parse it
             if isinstance(content, str) and content.strip().startswith('['):
                 try:
-                    import json
                     # Replace single quotes with double quotes for valid JSON if needed (though risky)
                     # Better to just try loading if it's valid JSON. 
                     # If it's a python repr string (single quotes), json.loads might fail. 
@@ -335,12 +384,13 @@ class AIChatView(APIView):
                 ChatMessage.objects.create(
                     session=session,
                     sender='ai',
-                    text=content
+                    text=response.content
                 )
             
             return Response({
                 'text': content, 
-                'sessionId': session.id if session else None
+                'sessionId': session.id if session else None,
+                'structured_findings': structured_findings # Include structured_findings in the response
             })
             
         except Exception as e:
@@ -359,7 +409,6 @@ class AISummarizeView(APIView):
         # --- Caching Logic ---
         session = None
         if session_id:
-            from .models import ChatSession
             try:
                 session = ChatSession.objects.get(pk=session_id)
                 # Check if cache is valid (same message count)
@@ -374,8 +423,6 @@ class AISummarizeView(APIView):
         
         pending_vaccines = []
         if patient_id:
-            from .models import Vaccination
-            from datetime import date
             pending_vaccines = list(Vaccination.objects.filter(
                 patient_id=patient_id, 
                 status='Pending', 
@@ -384,7 +431,6 @@ class AISummarizeView(APIView):
         
         latest_vitals = "None"
         if patient_id:
-            from .models import Visit
             last_visit = Visit.objects.filter(patient_id=patient_id).order_by('-date').first()
             if last_visit:
                 latest_vitals = f"Weight: {last_visit.weight} kg, Height: {last_visit.height} cm"
@@ -419,6 +465,9 @@ class AISummarizeView(APIView):
                     new_messages_text += f"{role}: {msg.get('text')}\n"
 
             
+            from datetime import date
+            current_date_str = date.today().strftime("%Y-%m-%d")
+
             if previous_summary:
                 # Incremental Prompt
                 template = """
@@ -433,14 +482,16 @@ class AISummarizeView(APIView):
                 
                 Context:
                 - Latest recorded Vitals: {latest_vitals}
+                - Today's Date: {current_date}
                 
                 Instructions:
                 1. Update 'diagnosis' if new symptoms clarify it.
-                2. Append important new details to 'notes'. Do NOT remove important old details unless contradicted.
-                3. Update 'weight'/'height'/'head_circumference' ONLY if explicitly mentioned in NEW messages (otherwise keep old or use vitals).
-                4. Merge 'visit_type' (add new tags if relevant).
-                5. Merge 'given_vaccines'.
-                6. Return the FULL updated JSON in the same format.
+                2. Append important new details to 'notes'.
+                3. Update 'weight', 'height', 'head_circumference', 'temperature', 'heart_rate', 'blood_pressure' ONLY if explicitly mentioned in NEW messages.
+                4. Update 'prescription' and 'follow_up_date' if mentioned. CALCULATE 'follow_up_date' based on Today's Date if a relative time (e.g. "in 5 days") is given.
+                5. Merge 'visit_type' (add new tags if relevant).
+                6. Merge 'given_vaccines'.
+                7. Return the FULL updated JSON in the same format.
                 
                 JSON Structure:
                 {{
@@ -449,6 +500,11 @@ class AISummarizeView(APIView):
                     "weight": number or null,
                     "height": number or null,
                     "head_circumference": number or null,
+                    "temperature": number or null,
+                    "heart_rate": number or null,
+                    "blood_pressure": "string" or null,
+                    "prescription": "string" or null,
+                    "follow_up_date": "YYYY-MM-DD" or null,
                     "visit_type": ["Sick", "Vaccination"],
                     "given_vaccines": ["vaccine1"]
                 }}
@@ -457,14 +513,15 @@ class AISummarizeView(APIView):
                 
                 prompt = PromptTemplate(
                     template=template,
-                    input_variables=["previous_summary", "new_messages_text", "latest_vitals"]
+                    input_variables=["previous_summary", "new_messages_text", "latest_vitals", "current_date"]
                 )
                 
                 chain = prompt | llm | StrOutputParser()
                 result = chain.invoke({
                     "previous_summary": previous_summary,
                     "new_messages_text": new_messages_text,
-                    "latest_vitals": latest_vitals
+                    "latest_vitals": latest_vitals,
+                    "current_date": current_date_str
                 })
 
             else:
@@ -474,19 +531,23 @@ class AISummarizeView(APIView):
                 
                 Context:
                 - Latest recorded Vitals: {latest_vitals}
+                - Today's Date: {current_date}
                 
                 Instructions:
                 1. Extract 'diagnosis' (short clinical term).
                 2. Extract 'notes' (detailed summary of symptoms/advice).
-                3. Extract 'weight', 'height', and 'head_circumference' if mentioned in chat. IF NOT MENTIONED, attempt to use 'Latest recorded Vitals'. If unknown, use null.
-                4. DETERMINE 'visit_type':
+                3. Extract 'weight', 'height', and 'head_circumference' if mentioned. Use null if unknown.
+                4. Extract Optional Vitals if mentioned: 'temperature', 'heart_rate', 'blood_pressure'.
+                5. Extract 'prescription' (medications, dosage, instructions).
+                6. Extract 'follow_up_date' (YYYY-MM-DD or null). CALCULATE based on Today's Date if relative (e.g. "next week").
+                7. DETERMINE 'visit_type':
                    - "Sick": if symptoms (fever, cough, pain, etc.) are discussed.
                    - "Vaccination": if vaccines are mentioned or administered.
                    - "Growth Check": if only weight/height/feeding is discussed.
                    - "General": if routine checkup or unclear.
                    - Return a LIST of matching tags. Example: ["Sick", "Vaccination"].
-                5. Extract 'given_vaccines' (list of strings) if administered.
-                6. Return ONLY valid JSON. Do not write "json" or backticks.
+                8. Extract 'given_vaccines' (list of strings) if administered.
+                9. Return ONLY valid JSON.
     
                 Conversation:
                 {new_messages_text}
@@ -498,6 +559,11 @@ class AISummarizeView(APIView):
                     "weight": number or null,
                     "height": number or null,
                     "head_circumference": number or null,
+                    "temperature": number or null,
+                    "heart_rate": number or null,
+                    "blood_pressure": "string" or null,
+                    "prescription": "string" or null,
+                    "follow_up_date": "YYYY-MM-DD" or null,
                     "visit_type": ["Sick", "Vaccination"],
                     "given_vaccines": ["vaccine1"]
                 }}
@@ -506,13 +572,14 @@ class AISummarizeView(APIView):
                 
                 prompt = PromptTemplate(
                     template=template,
-                    input_variables=["new_messages_text", "latest_vitals"]
+                    input_variables=["new_messages_text", "latest_vitals", "current_date"]
                 )
                 
                 chain = prompt | llm | StrOutputParser()
                 result = chain.invoke({
                     "new_messages_text": new_messages_text,
-                    "latest_vitals": latest_vitals
+                    "latest_vitals": latest_vitals,
+                    "current_date": current_date_str
                 })
             
             # Clean result of any markdown if LangChain didn't catch it
@@ -541,7 +608,6 @@ class AIHistorySummaryView(APIView):
             return Response({'error': 'Patient ID required'}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            from .models import Visit
             # Fetch last 3 visits
             last_visits = Visit.objects.filter(patient_id=patient_id).order_by('-date')[:3]
             
@@ -591,7 +657,6 @@ class ChatSessionListView(APIView):
         if not patient_id:
             return Response({'error': 'Patient ID required'}, status=status.HTTP_400_BAD_REQUEST)
         
-        from .models import ChatSession
         # Annotate with message count and filter > 0
         sessions = ChatSession.objects.filter(patient_id=patient_id).annotate(msg_count=Count('messages')).filter(msg_count__gt=0).order_by('-updated_at')
         data = [{'id': str(s.id), 'name': s.name, 'updated_at': s.updated_at} for s in sessions]
@@ -603,7 +668,6 @@ class ChatSessionMessagesView(APIView):
         if not session_id:
             return Response({'error': 'Session ID required'}, status=status.HTTP_400_BAD_REQUEST)
             
-        from .models import ChatMessage
         messages = ChatMessage.objects.filter(session_id=session_id).order_by('timestamp')
         data = [{'id': str(m.id), 'sender': m.sender, 'text': m.text, 'timestamp': m.timestamp} for m in messages]
         return Response(data)
@@ -632,7 +696,6 @@ class ChatSessionDeleteView(APIView):
         if not session_id:
             return Response({'error': 'Session ID required'}, status=status.HTTP_400_BAD_REQUEST)
         
-        from .models import ChatSession
         try:
              session = ChatSession.objects.get(pk=session_id)
              session.delete()
@@ -640,23 +703,7 @@ class ChatSessionDeleteView(APIView):
         except ChatSession.DoesNotExist:
              return Response({'error': 'Session not found'}, status=status.HTTP_404_NOT_FOUND)
 
-class ChatSessionCreateView(APIView):
-    def post(self, request):
-        patient_id = request.data.get('patientId')
-        name = request.data.get('name', 'New Chat')
-        
-        if not patient_id:
-            return Response({'error': 'Patient ID required'}, status=status.HTTP_400_BAD_REQUEST)
-            
-        from .models import ChatSession
-        
-        try:
-             patient = Patient.objects.get(pk=patient_id)
-        except Patient.DoesNotExist:
-             return Response({'error': 'Patient not found'}, status=status.HTTP_404_NOT_FOUND)
 
-        session = ChatSession.objects.create(patient=patient, name=name)
-        return Response({'id': str(session.id), 'name': session.name, 'created_at': session.created_at}, status=status.HTTP_201_CREATED)
 
 from rest_framework.parsers import MultiPartParser, FormParser
 
@@ -669,15 +716,28 @@ class AttachmentCreateView(APIView):
         print(f"DEBUG: Files: {request.FILES}")
         
         visit_id = request.data.get('visit_id')
-        if not visit_id:
-             print("DEBUG: Missing visit_id")
-             return Response({'error': 'Visit ID required'}, status=status.HTTP_400_BAD_REQUEST)
+        session_id = request.data.get('session_id')
         
-        try:
-            visit = Visit.objects.get(pk=visit_id)
-        except Visit.DoesNotExist:
-             print("DEBUG: Visit not found")
-             return Response({'error': 'Visit not found'}, status=status.HTTP_404_NOT_FOUND)
+        if not visit_id and not session_id:
+             print("DEBUG: Missing visit_id and session_id")
+             return Response({'error': 'Either Visit ID or Session ID required'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        visit = None
+        session = None
+        
+        if visit_id:
+            try:
+                visit = Visit.objects.get(pk=visit_id)
+            except Visit.DoesNotExist:
+                 print("DEBUG: Visit not found")
+                 return Response({'error': 'Visit not found'}, status=status.HTTP_404_NOT_FOUND)
+        
+        if session_id:
+            try:
+                session = ChatSession.objects.get(pk=session_id)
+            except ChatSession.DoesNotExist:
+                 print("DEBUG: Session not found")
+                 return Response({'error': 'Session not found'}, status=status.HTTP_404_NOT_FOUND)
 
         file = request.FILES.get('file')
         if not file:
@@ -685,10 +745,102 @@ class AttachmentCreateView(APIView):
              return Response({'error': 'No file provided'}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            attachment = Attachment.objects.create(visit=visit, file=file, name=file.name)
+            attachment = Attachment.objects.create(visit=visit, session=session, file=file, name=file.name)
             print(f"DEBUG: Attachment created: {attachment.id}")
             serializer = AttachmentSerializer(attachment, context={'request': request})
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         except Exception as e:
             print(f"DEBUG: Error creating attachment: {e}")
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+def analyze_scan_helper(attachment):
+    """
+    Helper function to analyze a scan attachment using Gemini Vision.
+    Returns a dict with 'findings', 'impression', 'modality'.
+    """
+    try:
+        # Check if already analyzed
+        if hasattr(attachment, 'scan_analysis'):
+            return {
+                'modality': attachment.scan_analysis.modality,
+                'findings': attachment.scan_analysis.findings,
+                'impression': attachment.scan_analysis.impression
+            }
+
+        image_path = attachment.file.path
+        
+        # Gemini Vision Model
+        llm = ChatGoogleGenerativeAI(
+            model="gemini-2.5-flash-lite",
+            google_api_key=API_KEY,
+            temperature=0.2
+        )
+        
+        with open(image_path, "rb") as image_file:
+            image_data = base64.b64encode(image_file.read()).decode("utf-8")
+            
+        messages = [
+            HumanMessage(
+                content=[
+                    {"type": "text", "text": "Analyze this medical scan. Identify the modality (X-Ray, MRI, CT, etc.), allow detailed findings, and an overall impression. Output ONLY JSON."},
+                    {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_data}"}}
+                ]
+            ),
+            HumanMessage(
+                content="Return JSON with keys: 'modality', 'findings', 'impression'. Do not use markdown."
+            )
+        ]
+        
+        response = llm.invoke(messages)
+        content = response.content
+        print(f"DEBUG: Gemini Vision Response: {content}")
+        
+        # Parse JSON
+        json_match = re.search(r'\{.*\}', content, re.DOTALL)
+        if json_match:
+            json_str = json_match.group(0)
+            data = json.loads(json_str)
+        else:
+            # Fallback
+            data = {
+                'modality': 'Unknown',
+                'findings': content,
+                'impression': 'See findings.'
+            }
+
+        # Save Result
+        scan_result = ScanResult.objects.create(
+            attachment=attachment,
+            modality=data.get('modality', 'Unknown'),
+            findings=data.get('findings', ''),
+            impression=data.get('impression', '')
+        )
+        return data
+
+    except Exception as e:
+        print(f"Analysis Helper Error: {e}")
+        return None
+
+
+class ScanAnalysisView(APIView):
+    def post(self, request):
+        try:
+            attachment_id = request.data.get('attachment_id')
+            if not attachment_id:
+                return Response({'error': 'Attachment ID required'}, status=400)
+            
+            try:
+                attachment = Attachment.objects.get(id=attachment_id)
+            except Attachment.DoesNotExist:
+                 return Response({'error': 'Attachment not found'}, status=404)
+
+            data = analyze_scan_helper(attachment)
+            if not data:
+                 return Response({'error': 'Analysis failed'}, status=500)
+            
+            return Response(data)
+
+        except Exception as e:
+            print(f"Scan Analysis Error: {e}")
+            return Response({'error': str(e)}, status=500)
+

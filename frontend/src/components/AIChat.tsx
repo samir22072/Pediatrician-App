@@ -1,9 +1,9 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, Mic, MicOff, Paperclip, Loader2, Bot, User, PanelLeft, Plus, MessageSquare, Copy, FileText, Sparkles, Check, Trash2, Volume2, VolumeX } from 'lucide-react';
+import { Send, Mic, MicOff, Paperclip, Loader2, Bot, User, PanelLeft, Plus, MessageSquare, Copy, FileText, Sparkles, Check, Trash2, Volume2, VolumeX, X } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
-import { AIService } from '@/lib/api';
+import { AIService, VisitService, AttachmentService } from '@/lib/api';
 import { Message, Session } from '@/lib/types';
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -39,6 +39,7 @@ export default function AIChat({ patientName, patientId, patientStats, onTransfe
 
     const [interimText, setInterimText] = useState(''); // New State for realtime feedback
     const [userRole, setUserRole] = useState<string | null>(null);
+    const [isAnalyzingScan, setIsAnalyzingScan] = useState(false);
 
     // Voice Recording State
     const [recordingTime, setRecordingTime] = useState(0);
@@ -61,13 +62,18 @@ export default function AIChat({ patientName, patientId, patientStats, onTransfe
 
     // Load sessions on mount
     useEffect(() => {
-        loadSessions();
         // Check local storage for role
         const role = localStorage.getItem('role');
         setUserRole(role);
-        if (role !== 'doctor') {
+        const isDoc = role === 'doctor';
+
+        if (isDoc) {
+            setIsDoctorMode(true);
+        } else {
             setIsDoctorMode(false);
         }
+
+        loadSessions(isDoc);
     }, []);
 
     // Auto-scroll effect
@@ -81,21 +87,23 @@ export default function AIChat({ patientName, patientId, patientStats, onTransfe
     }, [messages, isTyping]);
 
 
-    const loadSessions = async () => {
+    const loadSessions = async (overrideMode?: boolean) => {
         if (!patientId) return;
         try {
             const res = await AIService.listSessions({ patientId });
             setSessions(res.data);
+
+            const effectiveMode = (overrideMode !== undefined) ? overrideMode : isDoctorMode;
 
             // If sessions exist, select the most recent one automatically
             if (res.data.length > 0) {
                 // Do not auto-create. Just select the first one or let user choose? 
                 // User preference: "show previous chats and if nothing is present then just one window"
                 // Let's select the latest one.
-                if (!currentSessionId) selectSession(res.data[0].id);
+                if (!currentSessionId) selectSession(res.data[0].id, effectiveMode);
             } else {
                 // No sessions. Prepare "New Chat" state but DO NOT create on backend yet.
-                handleCreateSession(isDoctorMode);
+                handleCreateSession(effectiveMode);
             }
         } catch (err) {
             console.error("Failed to load sessions", err);
@@ -110,7 +118,7 @@ export default function AIChat({ patientName, patientId, patientStats, onTransfe
         if (window.innerWidth < 768) setShowSidebar(false);
     };
 
-    const selectSession = async (id: string) => {
+    const selectSession = async (id: string, overrideMode?: boolean) => {
         setCurrentSessionId(id);
         if (window.innerWidth < 768) setShowSidebar(false);
         try {
@@ -124,7 +132,8 @@ export default function AIChat({ patientName, patientId, patientStats, onTransfe
             }));
 
             if (uiMessages.length === 0) {
-                const initialText = isDoctorMode ? MSG_INIT_DOCTOR : MSG_INIT_PATIENT;
+                const effectiveMode = (overrideMode !== undefined) ? overrideMode : isDoctorMode;
+                const initialText = effectiveMode ? MSG_INIT_DOCTOR : MSG_INIT_PATIENT;
                 setMessages([{ id: 'init', sender: 'ai', text: initialText }]);
             } else {
                 setMessages(uiMessages);
@@ -139,59 +148,22 @@ export default function AIChat({ patientName, patientId, patientStats, onTransfe
         handleCreateSession(checked);
     };
 
-    const handleSend = async () => {
-        if (!inputValue.trim()) return;
+    // --- File Upload & Preview Logic ---
+    const [pendingFile, setPendingFile] = useState<File | null>(null);
+    const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
-        // 1. If no session, create one now (Lazy Create)
-        let activeSessionId = currentSessionId;
-        if (!activeSessionId) {
-            try {
-                const name = isDoctorMode ? 'Medical Scribe Session' : 'New Consultation';
-                const res = await AIService.createSession({ patientId, name });
-                activeSessionId = res.data.id;
-                setCurrentSessionId(activeSessionId);
-                setSessions(prev => [res.data, ...prev]);
-            } catch (err) {
-                console.error("Failed to lazily create session", err);
-                return;
-            }
-        }
+    const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (!e.target.files || !e.target.files[0]) return;
+        const file = e.target.files[0];
+        setPendingFile(file);
+        setPreviewUrl(URL.createObjectURL(file));
+        e.target.value = '';
+    };
 
-        const userMsg: Message = { id: Date.now().toString(), sender: 'user', text: inputValue };
-        setMessages(prev => [...prev, userMsg]);
-        setInputValue('');
-        setIsTyping(true);
-
-        try {
-            // Context building: include local vitals if available
-            const history = messages.map(m => ({ role: m.sender, text: m.text }));
-
-            const response = await AIService.chat({
-                message: userMsg.text,
-                history: history,
-                patientStats: patientStats,
-                patientId: patientId,
-                sessionId: activeSessionId, // Use the ensured ID
-                mode: isDoctorMode ? 'doctor' : 'patient'
-            });
-
-            const reply = response.data.text;
-            const structured = response.data.structured_data;
-
-            const aiMsg: Message = {
-                id: (Date.now() + 1).toString(),
-                sender: 'ai',
-                text: reply,
-                structuredData: structured
-            };
-            setMessages(prev => [...prev, aiMsg]);
-            speak(reply); // Trigger TTS
-
-        } catch (err) {
-            setMessages(prev => [...prev, { id: Date.now().toString(), sender: 'ai', text: "Sorry, I encountered an error. Please try again." }]);
-        } finally {
-            setIsTyping(false);
-        }
+    const clearPendingFile = () => {
+        setPendingFile(null);
+        if (previewUrl) URL.revokeObjectURL(previewUrl);
+        setPreviewUrl(null);
     };
 
     // --- Voice Logic (Enhanced) ---
@@ -247,7 +219,7 @@ export default function AIChat({ patientName, patientId, patientStats, onTransfe
                     if (finalTranscript) {
                         setInputValue(prev => prev + (prev ? ' ' : '') + finalTranscript);
                     }
-                    setInterimText(tempInterim); // Always update interim, regardless of final
+                    setInterimText(tempInterim);
                 };
 
                 recognitionRef.current.onerror = (event: any) => {
@@ -256,20 +228,12 @@ export default function AIChat({ patientName, patientId, patientStats, onTransfe
                         stopListening();
                         alert("Microphone access denied.");
                     }
-                    // Ignore 'no-speech' errors as they just mean silence
                 };
 
                 recognitionRef.current.onend = () => {
-                    // Auto-restart if not manually stopped (for continuous feel)
-                    // But prevent infinite loops if error is persistent
                     setIsListening(false);
                     setInterimText('');
                     if (timerRef.current) clearInterval(timerRef.current);
-
-                    if (!isManuallyStopped.current) {
-                        // Optional: Debounce restart or just let it stop to avoid aggressive behavior
-                        // For now, let's just stop to be safe, but UI reflects it.
-                    }
                 };
             }
 
@@ -304,26 +268,108 @@ export default function AIChat({ patientName, patientId, patientStats, onTransfe
 
     const speak = (text: string) => {
         if (!isTTSActive || !window.speechSynthesis) return;
-
-        // Cancel any current speech
         window.speechSynthesis.cancel();
-
         const utterance = new SpeechSynthesisUtterance(text);
         utterance.lang = 'en-US';
-        // Pick a nice voice if available
         const voices = window.speechSynthesis.getVoices();
         const preferredVoice = voices.find(v => v.name.includes("Google US English") || v.name.includes("Samantha"));
         if (preferredVoice) utterance.voice = preferredVoice;
-
         window.speechSynthesis.speak(utterance);
     };
 
-    // Stop speech when unmounting or switching capability
+    // Stop speech when unmounting
     useEffect(() => {
         return () => {
             if (window.speechSynthesis) window.speechSynthesis.cancel();
         };
     }, []);
+
+    // --- Main Send Logic ---
+    const handleSend = async () => {
+        if (!inputValue.trim() && !pendingFile) return;
+
+        setIsTyping(true);
+
+        // 1. If no session, create one now (Lazy Create)
+        let activeSessionId = currentSessionId;
+        if (!activeSessionId) {
+            try {
+                const sessionCount = sessions.length + 1;
+                const baseName = isDoctorMode ? 'Medical Scribe Session' : 'Consultation';
+                const name = `${baseName} ${sessionCount}`;
+
+                const res = await AIService.createSession({ patientId, name });
+                activeSessionId = res.data.id;
+                setCurrentSessionId(activeSessionId);
+                setSessions(prev => [res.data, ...prev]);
+            } catch (err) {
+                console.error("Failed to lazily create session", err);
+                setIsTyping(false);
+                return;
+            }
+        }
+
+        // Display User Message Immediately
+        const tempId = Date.now().toString();
+        const userMsg: Message = {
+            id: tempId,
+            sender: 'user',
+            text: inputValue,
+            imageUrl: previewUrl || undefined
+        };
+        setMessages(prev => [...prev, userMsg]);
+
+        // Clear Input State
+        setInputValue('');
+        const fileToUpload = pendingFile;
+        clearPendingFile();
+
+        try {
+            let attachmentId = undefined;
+
+            // 2. Upload File if present
+            if (fileToUpload) {
+                if (!patientId) throw new Error("Patient ID required");
+
+                const attachRes = await AttachmentService.create({
+                    sessionId: activeSessionId || undefined,
+                    file: fileToUpload
+                });
+                attachmentId = attachRes.data.id;
+            }
+
+            // 3. Send to Chat
+            const history = messages.map(m => ({ role: m.sender, text: m.text }));
+
+            const response = await AIService.chat({
+                message: userMsg.text || (fileToUpload ? `[Uploaded Image: ${fileToUpload.name}]` : ""),
+                history: history,
+                patientStats: patientStats,
+                patientId: patientId,
+                sessionId: activeSessionId,
+                mode: isDoctorMode ? 'doctor' : 'patient',
+                attachmentId: attachmentId
+            });
+
+            const reply = response.data.text;
+            const structured = response.data.structured_data;
+
+            const aiMsg: Message = {
+                id: (Date.now() + 1).toString(),
+                sender: 'ai',
+                text: reply,
+                structuredData: structured
+            };
+            setMessages(prev => [...prev, aiMsg]);
+            speak(reply);
+
+        } catch (err) {
+            console.error("Chat/Upload failed", err);
+            setMessages(prev => [...prev, { id: Date.now().toString(), sender: 'ai', text: "Sorry, I encountered an error processing your request." }]);
+        } finally {
+            setIsTyping(false);
+        }
+    };
 
     const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
         if (e.key === 'Enter' && !e.shiftKey) {
@@ -332,20 +378,16 @@ export default function AIChat({ patientName, patientId, patientStats, onTransfe
         }
     };
 
-    // --- Delete Session Logic ---
     const handleDeleteSession = async (e: React.MouseEvent, sessionId: string) => {
-        e.stopPropagation(); // Prevent selection when clicking delete
+        e.stopPropagation();
         if (!confirm("Are you sure you want to delete this chat session?")) return;
 
         try {
             await AIService.deleteSession({ sessionId });
             setSessions(prev => prev.filter(s => s.id !== sessionId));
-
-            // If deleted session was active, clear it
             if (currentSessionId === sessionId) {
                 setCurrentSessionId(null);
                 setMessages([]);
-                // Optionally select next available or create new
             }
         } catch (err) {
             console.error("Failed to delete session", err);
@@ -356,7 +398,6 @@ export default function AIChat({ patientName, patientId, patientStats, onTransfe
         if (!currentSessionId || messages.length === 0) return;
         setIsTyping(true);
         try {
-            // Include patientID and history. API expects 'history' as list of {role, text}
             const history = messages.map(m => ({ role: m.sender, text: m.text }));
             const res = await AIService.summarize({
                 patientId,
@@ -367,17 +408,11 @@ export default function AIChat({ patientName, patientId, patientStats, onTransfe
             if (res.data.summary) {
                 let parsedSummary = null;
                 let displayText = res.data.summary;
-
                 try {
-                    // Attempt to parse the JSON string
-                    // Clean code blocks just in case backend missed some
                     const cleanJson = res.data.summary.replace(/```json/g, '').replace(/```/g, '').trim();
                     parsedSummary = JSON.parse(cleanJson);
-
-                    // If successful, pretty print usage in chat or just confirmation
                     displayText = "Visit Report Data Generated successfully.";
                 } catch (e) {
-                    // Fallback to text if not valid JSON
                     parsedSummary = null;
                     displayText = `**Report Generated:**\n\n${res.data.summary}`;
                 }
@@ -390,15 +425,12 @@ export default function AIChat({ patientName, patientId, patientStats, onTransfe
                     timestamp: new Date().toISOString()
                 };
 
-                // Only add to chat if parsing FAILED (so user sees raw output)
-                // If successful, onTransfer handles it and we don't need a chat message
                 if (!parsedSummary) {
                     setMessages(prev => [...prev, reportMsg]);
                 }
 
-                // Auto-transfer if we have valid data and the callback exists
                 if (parsedSummary && onTransfer) {
-                    onTransfer(parsedSummary);
+                    onTransfer({ ...parsedSummary, sessionId: currentSessionId });
                 }
             }
         } catch (err) {
@@ -464,7 +496,7 @@ export default function AIChat({ patientName, patientId, patientStats, onTransfe
 
 
 
-                    {/* Generate Report Button - Visible mostly in Doctor Mode or if content exists */}
+                    {/* Generate Report Button - Visible if content exists */}
                     {messages.length > 0 && (
                         <TooltipProvider>
                             <Tooltip>
@@ -473,7 +505,7 @@ export default function AIChat({ patientName, patientId, patientStats, onTransfe
                                         variant="outline"
                                         size="sm"
                                         onClick={handleGenerateReport}
-                                        disabled={isTyping}
+                                        disabled={isTyping || isAnalyzingScan}
                                         className="h-8 gap-2 text-xs font-semibold sm:text-sm text-primary border-primary/20 hover:bg-primary/5 px-3"
                                     >
                                         <FileText size={14} />
@@ -487,6 +519,8 @@ export default function AIChat({ patientName, patientId, patientStats, onTransfe
                             </Tooltip>
                         </TooltipProvider>
                     )}
+
+
 
                     {/* Only show switch if user is a doctor */}
                     {userRole === 'doctor' && (
@@ -529,33 +563,35 @@ export default function AIChat({ patientName, patientId, patientStats, onTransfe
                     </div>
                     <ScrollArea className={cn("flex-1", !showSidebar && "hidden")}>
                         <div className="p-2 space-y-1">
-                            {sessions.map(s => (
-                                <button
-                                    key={s.id}
-                                    onClick={() => selectSession(s.id)}
-                                    className={cn(
-                                        "group w-full text-left px-3 py-2 rounded-md text-sm transition-colors flex items-center gap-2 truncate",
-                                        currentSessionId === s.id
-                                            ? "bg-primary/10 text-primary font-medium"
-                                            : "hover:bg-muted text-muted-foreground hover:text-foreground"
-                                    )}
-                                >
-                                    <MessageSquare size={14} className="shrink-0 opacity-70" />
-                                    <span className="truncate flex-1">{s.name || "Untitled Chat"}</span>
-                                    {/* Delete Button - visible on hover or if active */}
-                                    <div
-                                        role="button"
-                                        onClick={(e) => handleDeleteSession(e, s.id)}
+                            {sessions
+                                .filter(s => isDoctorMode || !s.name?.toLowerCase().includes("medical scribe"))
+                                .map(s => (
+                                    <button
+                                        key={s.id}
+                                        onClick={() => selectSession(s.id)}
                                         className={cn(
-                                            "shrink-0 p-1 rounded-md opacity-0 group-hover:opacity-100 hover:bg-destructive/10 hover:text-destructive transition-all",
-                                            currentSessionId === s.id && "opacity-100" // Always show on active
+                                            "group w-full text-left px-3 py-2 rounded-md text-sm transition-colors flex items-center gap-2 truncate",
+                                            currentSessionId === s.id
+                                                ? "bg-primary/10 text-primary font-medium"
+                                                : "hover:bg-muted text-muted-foreground hover:text-foreground"
                                         )}
-                                        title="Delete Session"
                                     >
-                                        <Trash2 size={12} />
-                                    </div>
-                                </button>
-                            ))}
+                                        <MessageSquare size={14} className="shrink-0 opacity-70" />
+                                        <span className="truncate flex-1">{s.name || "Untitled Chat"}</span>
+                                        {/* Delete Button - visible on hover or if active */}
+                                        <div
+                                            role="button"
+                                            onClick={(e) => handleDeleteSession(e, s.id)}
+                                            className={cn(
+                                                "shrink-0 p-1 rounded-md opacity-0 group-hover:opacity-100 hover:bg-destructive/10 hover:text-destructive transition-all",
+                                                currentSessionId === s.id && "opacity-100" // Always show on active
+                                            )}
+                                            title="Delete Session"
+                                        >
+                                            <Trash2 size={12} />
+                                        </div>
+                                    </button>
+                                ))}
                         </div>
                     </ScrollArea>
                 </div>
@@ -587,8 +623,18 @@ export default function AIChat({ patientName, patientId, patientStats, onTransfe
                                                 : "bg-muted/80 text-foreground rounded-tl-none border border-border"
                                         )}
                                     >
+                                        {msg.imageUrl && (
+                                            <img
+                                                src={msg.imageUrl}
+                                                alt="Uploaded Scan"
+                                                className="max-w-full h-auto rounded-md mb-2 border border-white/20"
+                                            />
+                                        )}
                                         {msg.sender === 'ai' ? (
                                             <div className="prose prose-sm dark:prose-invert max-w-none text-sm leading-relaxed break-words">
+                                                {msg.imageUrl && (
+                                                    <img src={msg.imageUrl} alt="Analyzed Scan" className="max-w-full h-auto rounded-md mb-2" />
+                                                )}
                                                 <ReactMarkdown>{msg.text}</ReactMarkdown>
                                             </div>
                                         ) : (
@@ -657,6 +703,31 @@ export default function AIChat({ patientName, patientId, patientStats, onTransfe
                             </div>
                         )}
 
+                        {pendingFile && previewUrl && (
+                            <div className="max-w-3xl mx-auto mb-2 flex items-start px-1 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                                <div className="relative group">
+                                    <div className="absolute -top-2 -right-2 z-10">
+                                        <Button
+                                            variant="destructive"
+                                            size="icon"
+                                            className="h-5 w-5 rounded-full shadow-sm"
+                                            onClick={clearPendingFile}
+                                        >
+                                            <X size={12} />
+                                        </Button>
+                                    </div>
+                                    <img
+                                        src={previewUrl}
+                                        alt="Preview"
+                                        className="h-20 w-auto rounded-md border border-border shadow-sm bg-background/50 object-cover"
+                                    />
+                                    <div className="text-[10px] text-muted-foreground mt-1 max-w-[120px] truncate">
+                                        {pendingFile.name}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
                         <div className="max-w-3xl mx-auto flex gap-2 items-end">
                             <Button
                                 variant={isListening ? "destructive" : "outline"}
@@ -671,7 +742,23 @@ export default function AIChat({ patientName, patientId, patientStats, onTransfe
                                 {isListening ? <MicOff size={18} /> : <Mic size={18} />}
                             </Button>
 
-                            <div className="flex-1 relative">
+                            <div className="flex-1 relative flex gap-2">
+                                <Button
+                                    variant="outline"
+                                    size="icon"
+                                    className="h-10 w-10 shrink-0 rounded-full"
+                                    onClick={() => document.getElementById('chat-file-upload')?.click()}
+                                    disabled={isTyping}
+                                >
+                                    <Paperclip size={18} />
+                                </Button>
+                                <input
+                                    id="chat-file-upload"
+                                    type="file"
+                                    accept="image/*"
+                                    className="hidden"
+                                    onChange={handleFileUpload}
+                                />
                                 <Textarea
                                     value={inputValue}
                                     onChange={(e) => setInputValue(e.target.value)}

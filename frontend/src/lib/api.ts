@@ -48,19 +48,17 @@ export const AIService = {
     createSession: (data: any) => api.post('ai/sessions/create/', data),
     getSessionMessages: (data: any) => api.post('ai/sessions/messages/', data),
     deleteSession: (data: any) => api.post('ai/sessions/delete/', data),
+    scanAnalysis: (data: any) => api.post('ai/scan-analysis/', data),
 };
 
 export const AttachmentService = {
-    create: (visitId: string, file: File) => {
-        console.log("AttachmentService.create called", visitId, file);
+    create: (params: { visitId?: string, sessionId?: string, file: File }) => {
+        const { visitId, sessionId, file } = params;
+        console.log("AttachmentService.create called", params);
         const formData = new FormData();
-        formData.append('visit_id', visitId);
+        if (visitId) formData.append('visit_id', visitId);
+        if (sessionId) formData.append('session_id', sessionId);
         formData.append('file', file);
-
-        // Log FormData entries for debugging
-        for (let [key, value] of formData.entries()) {
-            console.log(`FormData: ${key} =`, value);
-        }
 
         return api.post('attachments/create/', formData, {
             headers: {
