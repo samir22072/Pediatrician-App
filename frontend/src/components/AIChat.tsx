@@ -15,6 +15,13 @@ import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select"
 import { cn } from "@/lib/utils"
 
 interface AIChatProps {
@@ -128,7 +135,8 @@ export default function AIChat({ patientName, patientId, patientStats, onTransfe
                 sender: m.sender,
                 text: m.text,
                 timestamp: m.timestamp,
-                structuredData: m.structured_data
+                structuredData: m.structured_data,
+                imageUrl: m.imageUrl
             }));
 
             if (uiMessages.length === 0) {
@@ -160,9 +168,9 @@ export default function AIChat({ patientName, patientId, patientStats, onTransfe
         e.target.value = '';
     };
 
-    const clearPendingFile = () => {
+    const clearPendingFile = (forceRevoke = true) => {
         setPendingFile(null);
-        if (previewUrl) URL.revokeObjectURL(previewUrl);
+        if (previewUrl && forceRevoke) URL.revokeObjectURL(previewUrl);
         setPreviewUrl(null);
     };
 
@@ -288,6 +296,8 @@ export default function AIChat({ patientName, patientId, patientStats, onTransfe
     const handleSend = async () => {
         if (!inputValue.trim() && !pendingFile) return;
 
+        if (isListening) stopListening();
+
         setIsTyping(true);
 
         // 1. If no session, create one now (Lazy Create)
@@ -319,13 +329,15 @@ export default function AIChat({ patientName, patientId, patientStats, onTransfe
         };
         setMessages(prev => [...prev, userMsg]);
 
-        // Clear Input State
+        // Clear Input State - but don't revoke preview URL yet so it stays visible in the user message
         setInputValue('');
         const fileToUpload = pendingFile;
-        clearPendingFile();
+        const currentPreviewUrl = previewUrl; // Keep a local reference
+        clearPendingFile(false); // Don't revoke yet
 
         try {
             let attachmentId = undefined;
+            let serverImageUrl: string | undefined = undefined;
 
             // 2. Upload File if present
             if (fileToUpload) {
@@ -336,6 +348,16 @@ export default function AIChat({ patientName, patientId, patientStats, onTransfe
                     file: fileToUpload
                 });
                 attachmentId = attachRes.data.id;
+                serverImageUrl = attachRes.data.file;
+
+                // Update the user message in local state with the server URL
+                if (serverImageUrl) {
+                    setMessages(prev => prev.map(m =>
+                        m.id === tempId ? { ...m, imageUrl: serverImageUrl } : m
+                    ));
+                    // Now safe to revoke the local blob URL
+                    if (currentPreviewUrl) URL.revokeObjectURL(currentPreviewUrl);
+                }
             }
 
             // 3. Send to Chat
@@ -522,12 +544,14 @@ export default function AIChat({ patientName, patientId, patientStats, onTransfe
 
 
 
+
+
                     {/* Only show switch if user is a doctor */}
                     {userRole === 'doctor' && (
                         <TooltipProvider>
                             <Tooltip>
                                 <TooltipTrigger asChild>
-                                    <div className="flex items-center gap-2 px-2">
+                                    <div className="flex items-center gap-2 px-2 border-l ml-1">
                                         <Label htmlFor="mode-switch" className="text-xs font-medium cursor-pointer hidden sm:inline-block">
                                             {isDoctorMode ? 'Doctor Mode' : 'Patient Mode'}
                                         </Label>
@@ -625,7 +649,7 @@ export default function AIChat({ patientName, patientId, patientStats, onTransfe
                                     >
                                         {msg.imageUrl && (
                                             <img
-                                                src={msg.imageUrl}
+                                                src={msg.imageUrl?.startsWith('/') ? `${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'}${msg.imageUrl}` : msg.imageUrl}
                                                 alt="Uploaded Scan"
                                                 className="max-w-full h-auto rounded-md mb-2 border border-white/20"
                                             />
@@ -633,7 +657,11 @@ export default function AIChat({ patientName, patientId, patientStats, onTransfe
                                         {msg.sender === 'ai' ? (
                                             <div className="prose prose-sm dark:prose-invert max-w-none text-sm leading-relaxed break-words">
                                                 {msg.imageUrl && (
-                                                    <img src={msg.imageUrl} alt="Analyzed Scan" className="max-w-full h-auto rounded-md mb-2" />
+                                                    <img
+                                                        src={msg.imageUrl?.startsWith('/') ? `${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'}${msg.imageUrl}` : msg.imageUrl}
+                                                        alt="Analyzed Scan"
+                                                        className="max-w-full h-auto rounded-md mb-2"
+                                                    />
                                                 )}
                                                 <ReactMarkdown>{msg.text}</ReactMarkdown>
                                             </div>
@@ -711,7 +739,7 @@ export default function AIChat({ patientName, patientId, patientStats, onTransfe
                                             variant="destructive"
                                             size="icon"
                                             className="h-5 w-5 rounded-full shadow-sm"
-                                            onClick={clearPendingFile}
+                                            onClick={() => clearPendingFile()}
                                         >
                                             <X size={12} />
                                         </Button>

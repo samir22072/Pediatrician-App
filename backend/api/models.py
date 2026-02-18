@@ -34,6 +34,7 @@ class ChatMessage(models.Model):
     sender = models.CharField(max_length=10, choices=[('user', 'User'), ('ai', 'AI')])
     text = models.TextField()
     timestamp = models.DateTimeField(auto_now_add=True)
+    attachment = models.ForeignKey('Attachment', on_delete=models.SET_NULL, null=True, blank=True, related_name='chat_messages')
 
     class Meta:
         ordering = ['timestamp']
