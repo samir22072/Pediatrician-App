@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Patient, Visit } from '@/lib/types';
-import { ArrowLeft, Plus, Edit, Activity, Syringe, ClipboardList, Sparkles, Scan } from 'lucide-react';
+import { ArrowLeft, Plus, Edit, Activity, Syringe, ClipboardList, Sparkles, Scan, Check, X, Loader2, Trash2 } from 'lucide-react';
 import AIChat from './AIChat';
 import ChartViewer from './ChartViewer';
 import VaccinationChecklist from './VaccinationChecklist';
@@ -12,6 +12,9 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { AIService } from '@/lib/api';
+import { Textarea } from "@/components/ui/textarea"
+import { Input } from "@/components/ui/input"
 
 interface PatientDetailsProps {
     patient: Patient;
@@ -19,12 +22,64 @@ interface PatientDetailsProps {
     onAddVisit: () => void;
     onEditVisit: (visit: Visit) => void;
     onTransferToVisit: (summary: any) => void;
+    onVisitDeleted?: () => void;
 }
 
-export default function PatientDetails({ patient, onBack, onAddVisit, onEditVisit, onTransferToVisit }: PatientDetailsProps) {
+export default function PatientDetails({ patient, onBack, onAddVisit, onEditVisit, onTransferToVisit, onVisitDeleted }: PatientDetailsProps) {
     const visits = patient.visits || [];
     const vaccinations = patient.vaccinations || [];
     const lastVisit = visits.length > 0 ? visits[visits.length - 1] : null;
+
+    const [editingScanId, setEditingScanId] = useState<string | null>(null);
+    const [editForm, setEditForm] = useState({ modality: '', findings: '', impression: '' });
+    const [savingScan, setSavingScan] = useState(false);
+    const [userRole, setUserRole] = useState<string | null>(null);
+    const [activeTab, setActiveTabState] = useState("ai_triage");
+
+    React.useEffect(() => {
+        const savedTab = sessionStorage.getItem('patientActiveTab');
+        if (savedTab) setActiveTabState(savedTab);
+        setUserRole(localStorage.getItem('role'));
+    }, []);
+
+    const setActiveTab = (val: string) => {
+        setActiveTabState(val);
+        sessionStorage.setItem('patientActiveTab', val);
+    };
+
+    const handleEditScan = (att: any) => {
+        setEditingScanId(att.scan_analysis?.id || null);
+        setEditForm({
+            modality: att.scan_analysis?.modality || '',
+            findings: att.scan_analysis?.findings || '',
+            impression: att.scan_analysis?.impression || ''
+        });
+    };
+
+    const handleSaveScan = async () => {
+        if (!editingScanId) return;
+        setSavingScan(true);
+        try {
+            await AIService.updateScanResult({
+                id: editingScanId,
+                ...editForm
+            });
+            // Update local state by finding the attachment and updating it
+            // For simplicity, we can just trigger a re-fetch or update patient object
+            // Here we'll just reload the page or rely on the user to refresh if parent state isn't easily accessible
+            // Ideally we'd have a refreshPatient callback. 
+            // In PatientDetailsPage, fetchPatientDetails is available. 
+            // Let's assume the user will see the changes on next load or we find a way to update.
+            // Since we don't have a refresh callback in props yet, let's keep it simple.
+            window.location.reload();
+        } catch (err) {
+            console.error("Failed to save scan", err);
+            alert("Failed to save changes");
+        } finally {
+            setSavingScan(false);
+            setEditingScanId(null);
+        }
+    };
 
     const calculateAge = (dob: string) => {
         if (!dob) return 'N/A';
@@ -58,9 +113,11 @@ export default function PatientDetails({ patient, onBack, onAddVisit, onEditVisi
         <div className="flex flex-col h-[calc(100vh-80px)] animate-in fade-in zoom-in-95 duration-500 p-6 gap-6">
             <NavbarActions>
                 <div className="flex items-center gap-2">
-                    <Button onClick={onBack} variant="outline" className="gap-2">
-                        <ArrowLeft size={16} /> Back
-                    </Button>
+                    {userRole !== 'patient' && (
+                        <Button onClick={onBack} variant="outline" className="gap-2">
+                            <ArrowLeft size={16} /> Back
+                        </Button>
+                    )}
                     <div className="flex-1" />
                     <Button onClick={onAddVisit} className="gap-2">
                         <Plus size={16} /> Add Visit
@@ -123,7 +180,7 @@ export default function PatientDetails({ patient, onBack, onAddVisit, onEditVisi
 
                 {/* Right Panel: Tabs & Content */}
                 <div className="min-h-0 flex flex-col">
-                    <Tabs defaultValue="ai_triage" className="flex flex-col h-full">
+                    <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col h-full">
                         <div className="flex-none mb-4">
                             <TabsList className="grid w-full grid-cols-5 max-w-3xl">
                                 <TabsTrigger value="ai_triage" className="gap-2">
@@ -182,18 +239,81 @@ export default function PatientDetails({ patient, onBack, onAddVisit, onEditVisi
                                                                     <p className="text-sm text-muted-foreground">Analyzed on {att.scan_analysis?.analyzed_at ? new Date(att.scan_analysis.analyzed_at).toLocaleDateString() : 'Unknown Date'}</p>
                                                                 </div>
                                                             </div>
-                                                            <Badge variant="outline">{visits.find(v => v.attachments.includes(att))?.date}</Badge>
+                                                            {editingScanId === att.scan_analysis?.id ? (
+                                                                <div className="flex gap-2">
+                                                                    <Button
+                                                                        variant="ghost"
+                                                                        size="icon"
+                                                                        className="text-green-500 hover:text-green-600"
+                                                                        onClick={handleSaveScan}
+                                                                        disabled={savingScan}
+                                                                    >
+                                                                        {savingScan ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
+                                                                    </Button>
+                                                                    <Button
+                                                                        variant="ghost"
+                                                                        size="icon"
+                                                                        className="text-red-500 hover:text-red-600"
+                                                                        onClick={() => setEditingScanId(null)}
+                                                                        disabled={savingScan}
+                                                                    >
+                                                                        <X size={16} />
+                                                                    </Button>
+                                                                </div>
+                                                            ) : (
+                                                                <div className="flex items-center gap-2">
+                                                                    <Badge variant="outline">{visits.find(v => v.attachments.includes(att))?.date}</Badge>
+                                                                    <Button
+                                                                        variant="ghost"
+                                                                        size="icon"
+                                                                        onClick={() => handleEditScan(att)}
+                                                                        className="h-8 w-8"
+                                                                    >
+                                                                        <Edit size={14} />
+                                                                    </Button>
+                                                                </div>
+                                                            )}
                                                         </div>
 
                                                         <div className="space-y-4 mt-2">
-                                                            <div className="bg-muted/30 p-3 rounded-md">
-                                                                <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2">Findings</h4>
-                                                                <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">{att.scan_analysis?.findings}</p>
-                                                            </div>
-                                                            <div className="bg-blue-500/10 p-3 rounded-md border border-blue-500/20">
-                                                                <h4 className="text-xs font-bold uppercase tracking-wider text-blue-400 mb-2">Impression</h4>
-                                                                <p className="text-sm text-foreground font-medium">{att.scan_analysis?.impression}</p>
-                                                            </div>
+                                                            {editingScanId === att.scan_analysis?.id ? (
+                                                                <>
+                                                                    <div className="space-y-2">
+                                                                        <label className="text-xs font-bold uppercase text-muted-foreground">Modality</label>
+                                                                        <Input
+                                                                            value={editForm.modality}
+                                                                            onChange={(e) => setEditForm({ ...editForm, modality: e.target.value })}
+                                                                            placeholder="e.g. X-Ray"
+                                                                        />
+                                                                    </div>
+                                                                    <div className="space-y-2">
+                                                                        <label className="text-xs font-bold uppercase text-muted-foreground">Findings</label>
+                                                                        <Textarea
+                                                                            value={editForm.findings}
+                                                                            onChange={(e) => setEditForm({ ...editForm, findings: e.target.value })}
+                                                                            className="min-h-[100px]"
+                                                                        />
+                                                                    </div>
+                                                                    <div className="space-y-2">
+                                                                        <label className="text-xs font-bold uppercase text-muted-foreground">Impression</label>
+                                                                        <Input
+                                                                            value={editForm.impression}
+                                                                            onChange={(e) => setEditForm({ ...editForm, impression: e.target.value })}
+                                                                        />
+                                                                    </div>
+                                                                </>
+                                                            ) : (
+                                                                <>
+                                                                    <div className="bg-muted/30 p-3 rounded-md">
+                                                                        <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2">Findings</h4>
+                                                                        <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">{att.scan_analysis?.findings}</p>
+                                                                    </div>
+                                                                    <div className="bg-blue-500/10 p-3 rounded-md border border-blue-500/20">
+                                                                        <h4 className="text-xs font-bold uppercase tracking-wider text-blue-400 mb-2">Impression</h4>
+                                                                        <p className="text-sm text-foreground font-medium">{att.scan_analysis?.impression}</p>
+                                                                    </div>
+                                                                </>
+                                                            )}
                                                         </div>
 
                                                         <div className="mt-4 pt-4 border-t flex justify-between items-center">
@@ -282,6 +402,27 @@ export default function PatientDetails({ patient, onBack, onAddVisit, onEditVisi
                                                             <Button variant="ghost" size="icon" onClick={() => onEditVisit(visit)}>
                                                                 <Edit size={16} />
                                                             </Button>
+                                                            {userRole === 'doctor' && (
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="icon"
+                                                                    className="text-destructive hover:text-destructive/90 hover:bg-destructive/10"
+                                                                    onClick={async (e) => {
+                                                                        e.stopPropagation();
+                                                                        if (confirm('Are you sure you want to delete this visit? This action cannot be undone.')) {
+                                                                            try {
+                                                                                await import('@/lib/api').then(m => m.VisitService.delete(visit.id));
+                                                                                window.location.reload();
+                                                                            } catch (err) {
+                                                                                console.error(err);
+                                                                                alert('Failed to delete visit');
+                                                                            }
+                                                                        }
+                                                                    }}
+                                                                >
+                                                                    <Trash2 size={16} />
+                                                                </Button>
+                                                            )}
                                                         </div>
                                                     </CardContent>
                                                 </Card>

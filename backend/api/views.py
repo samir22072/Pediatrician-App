@@ -155,6 +155,19 @@ class VisitUpdateView(APIView):
         except Visit.DoesNotExist:
              return Response({'error': 'Visit not found'}, status=status.HTTP_404_NOT_FOUND)
 
+class VisitDeleteView(APIView):
+    def post(self, request):
+        visit_id = request.data.get('id')
+        if not visit_id:
+            return Response({'error': 'Visit ID required'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            visit = Visit.objects.get(pk=visit_id)
+            visit.delete()
+            return Response({'message': 'Visit deleted'}, status=status.HTTP_200_OK)
+        except Visit.DoesNotExist:
+             return Response({'error': 'Visit not found'}, status=status.HTTP_404_NOT_FOUND)
+
 
 
 
@@ -353,6 +366,45 @@ class AIHistorySummaryView(APIView):
             print(f"AI History Summary Error: {e}")
             # Fallback instead of 500 to keep UI smooth
             return Response({'summary': "Could not generate AI summary at this time."})
+            
+class ScanAnalysisView(APIView):
+    def post(self, request):
+        if not API_KEY:
+            return Response({'error': 'Gemini API Key not configured'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            
+        attachment_id = request.data.get('attachmentId')
+        if not attachment_id:
+            return Response({'error': 'Attachment ID required'}, status=status.HTTP_400_BAD_REQUEST)
+            
+        try:
+            attachment = Attachment.objects.get(id=attachment_id)
+            analysis = analyze_scan_helper(attachment)
+            if analysis:
+                return Response(analysis)
+            return Response({'error': 'Failed to analyze scan'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        except Attachment.DoesNotExist:
+            return Response({'error': 'Attachment not found'}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class ScanResultUpdateView(APIView):
+    permission_classes = [IsAuthenticated]
+    def post(self, request):
+        scan_result_id = request.data.get('id')
+        if not scan_result_id:
+            return Response({'error': 'Scan Result ID required'}, status=status.HTTP_400_BAD_REQUEST)
+            
+        try:
+            scan_result = ScanResult.objects.get(id=scan_result_id)
+            scan_result.modality = request.data.get('modality', scan_result.modality)
+            scan_result.findings = request.data.get('findings', scan_result.findings)
+            scan_result.impression = request.data.get('impression', scan_result.impression)
+            scan_result.save()
+            return Response({'status': 'success'})
+        except ScanResult.DoesNotExist:
+            return Response({'error': 'Scan Result not found'}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
             
 class ChatSessionListView(APIView):
     def post(self, request):

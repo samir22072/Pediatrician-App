@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { AuthService } from '@/lib/api';
 import { useRouter } from 'next/navigation';
-import { User, Lock } from 'lucide-react';
+import { User, Lock, Activity } from 'lucide-react';
 
 export default function LoginPage() {
     const router = useRouter();
@@ -43,13 +43,10 @@ export default function LoginPage() {
                 <CardHeader className="space-y-1 text-center">
                     <div className="flex justify-center mb-4">
                         <div className="p-3 bg-primary/10 rounded-full">
-                            <Lock className="w-8 h-8 text-primary" />
+                            <Activity className="w-8 h-8 text-primary" />
                         </div>
                     </div>
-                    <CardTitle className="text-2xl font-bold">Welcome Back</CardTitle>
-                    <CardDescription>
-                        Enter your credentials to access your dashboard
-                    </CardDescription>
+                    <CardTitle className="text-2xl font-bold text-primary tracking-tight">PediaCare AI</CardTitle>
                 </CardHeader>
                 <CardContent>
                     <form onSubmit={handleLogin} className="space-y-4">
@@ -59,7 +56,7 @@ export default function LoginPage() {
                                 <User className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                                 <Input
                                     id="username"
-                                    placeholder="Enter your username"
+                                    placeholder="Enter Medical ID or Username"
                                     className="pl-10"
                                     value={username}
                                     onChange={(e) => setUsername(e.target.value)}
@@ -74,7 +71,7 @@ export default function LoginPage() {
                                 <Input
                                     id="password"
                                     type="password"
-                                    placeholder="••••••••"
+                                    placeholder="Enter your password"
                                     className="pl-10"
                                     value={password}
                                     onChange={(e) => setPassword(e.target.value)}

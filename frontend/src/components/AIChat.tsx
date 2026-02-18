@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, Mic, MicOff, Paperclip, Loader2, Bot, User, PanelLeft, Plus, MessageSquare, Copy, FileText, Sparkles, Check, Trash2, Volume2, VolumeX, X } from 'lucide-react';
+import { Send, Mic, MicOff, Paperclip, Loader2, Bot, User, PanelLeft, Plus, MessageSquare, Copy, FileText, Sparkles, Check, Trash2, Volume2, VolumeX, X, Activity } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { AIService, VisitService, AttachmentService } from '@/lib/api';
 import { Message, Session } from '@/lib/types';
@@ -101,15 +101,16 @@ export default function AIChat({ patientName, patientId, patientStats, onTransfe
             setSessions(res.data);
 
             const effectiveMode = (overrideMode !== undefined) ? overrideMode : isDoctorMode;
+            const filteredSessions = res.data.filter((s: Session) => {
+                const isScribe = s.name?.toLowerCase().includes("medical scribe");
+                return effectiveMode ? isScribe : !isScribe;
+            });
 
-            // If sessions exist, select the most recent one automatically
-            if (res.data.length > 0) {
-                // Do not auto-create. Just select the first one or let user choose? 
-                // User preference: "show previous chats and if nothing is present then just one window"
-                // Let's select the latest one.
-                if (!currentSessionId) selectSession(res.data[0].id, effectiveMode);
+            setSessions(res.data);
+
+            if (filteredSessions.length > 0) {
+                if (!currentSessionId) selectSession(filteredSessions[0].id, effectiveMode, filteredSessions[0].name);
             } else {
-                // No sessions. Prepare "New Chat" state but DO NOT create on backend yet.
                 handleCreateSession(effectiveMode);
             }
         } catch (err) {
@@ -125,7 +126,7 @@ export default function AIChat({ patientName, patientId, patientStats, onTransfe
         if (window.innerWidth < 768) setShowSidebar(false);
     };
 
-    const selectSession = async (id: string, overrideMode?: boolean) => {
+    const selectSession = async (id: string, overrideMode?: boolean, sessionName?: string) => {
         setCurrentSessionId(id);
         if (window.innerWidth < 768) setShowSidebar(false);
         try {
@@ -139,12 +140,21 @@ export default function AIChat({ patientName, patientId, patientStats, onTransfe
                 imageUrl: m.imageUrl
             }));
 
+            // Use provided sessionName if available, else look in state
+            const effectiveName = sessionName || sessions.find(s => s.id === id)?.name;
+            const isScribe = effectiveName?.toLowerCase().includes("medical scribe");
+
+            const initialText = isScribe ? MSG_INIT_DOCTOR : MSG_INIT_PATIENT;
+            const initMsg: Message = { id: 'init', sender: 'ai', text: initialText };
+
             if (uiMessages.length === 0) {
-                const effectiveMode = (overrideMode !== undefined) ? overrideMode : isDoctorMode;
-                const initialText = effectiveMode ? MSG_INIT_DOCTOR : MSG_INIT_PATIENT;
-                setMessages([{ id: 'init', sender: 'ai', text: initialText }]);
+                setMessages([initMsg]);
             } else {
-                setMessages(uiMessages);
+                if (uiMessages[0].text !== initialText) {
+                    setMessages([initMsg, ...uiMessages]);
+                } else {
+                    setMessages(uiMessages);
+                }
             }
         } catch (err) {
             console.error("Load messages failed", err);
@@ -546,27 +556,14 @@ export default function AIChat({ patientName, patientId, patientStats, onTransfe
 
 
 
-                    {/* Only show switch if user is a doctor */}
+                    {/* Doctor Badge - Only show if user is a doctor */}
                     {userRole === 'doctor' && (
-                        <TooltipProvider>
-                            <Tooltip>
-                                <TooltipTrigger asChild>
-                                    <div className="flex items-center gap-2 px-2 border-l ml-1">
-                                        <Label htmlFor="mode-switch" className="text-xs font-medium cursor-pointer hidden sm:inline-block">
-                                            {isDoctorMode ? 'Doctor Mode' : 'Patient Mode'}
-                                        </Label>
-                                        <Switch
-                                            id="mode-switch"
-                                            checked={isDoctorMode}
-                                            onCheckedChange={toggleMode}
-                                        />
-                                    </div>
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                    <p>Switch between Patient and Doctor personas</p>
-                                </TooltipContent>
-                            </Tooltip>
-                        </TooltipProvider>
+                        <div className="flex items-center gap-2 px-3 border-l ml-1">
+                            <Badge variant="secondary" className="bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300 gap-1 px-2">
+                                <Activity size={12} />
+                                Doctor Mode
+                            </Badge>
+                        </div>
                     )}
                 </div>
             </div>
@@ -588,7 +585,10 @@ export default function AIChat({ patientName, patientId, patientStats, onTransfe
                     <ScrollArea className={cn("flex-1", !showSidebar && "hidden")}>
                         <div className="p-2 space-y-1">
                             {sessions
-                                .filter(s => isDoctorMode || !s.name?.toLowerCase().includes("medical scribe"))
+                                .filter(s => {
+                                    const isScribe = s.name?.toLowerCase().includes("medical scribe");
+                                    return isDoctorMode ? isScribe : !isScribe;
+                                })
                                 .map(s => (
                                     <button
                                         key={s.id}
@@ -770,7 +770,7 @@ export default function AIChat({ patientName, patientId, patientStats, onTransfe
                                 {isListening ? <MicOff size={18} /> : <Mic size={18} />}
                             </Button>
 
-                            <div className="flex-1 relative flex gap-2">
+                            <div className="flex-1 relative flex gap-2 items-end">
                                 <Button
                                     variant="outline"
                                     size="icon"

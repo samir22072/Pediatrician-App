@@ -3,8 +3,8 @@ import './globals.css';
 import Header from '@/components/Header';
 
 export const metadata: Metadata = {
-  title: 'Pediatric Growth Tracker',
-  description: 'pediaTrack',
+  title: 'PediaCare AI',
+  description: 'PediaCare AI',
 };
 
 export default function RootLayout({

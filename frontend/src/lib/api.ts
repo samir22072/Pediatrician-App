@@ -38,6 +38,7 @@ export const PatientService = {
 export const VisitService = {
     create: (data: any) => api.post('visits/create/', data),
     update: (data: any) => api.post('visits/update/', data),
+    delete: (id: string) => api.post('visits/delete/', { id }),
 };
 
 export const AIService = {
@@ -49,6 +50,8 @@ export const AIService = {
     getSessionMessages: (data: any) => api.post('ai/sessions/messages/', data),
     deleteSession: (data: any) => api.post('ai/sessions/delete/', data),
     scanAnalysis: (data: any) => api.post('ai/scan-analysis/', data),
+    updateScanResult: (data: { id: string, modality?: string, findings?: string, impression?: string }) =>
+        api.post('ai/scan-results/update/', data),
 };
 
 export const AttachmentService = {

@@ -21,16 +21,16 @@ export default function PatientDetailsPage({ patientId, onBack }: PatientDetails
         if (patientId) fetchPatientDetails(patientId);
     }, [patientId]);
 
-    const fetchPatientDetails = async (id: string) => {
+    const fetchPatientDetails = async (id: string, background = false) => {
         try {
-            setLoading(true);
+            if (!background) setLoading(true);
             const res = await PatientService.detail(id);
             setPatient(res.data);
         } catch (err) {
             console.error("Failed to fetch patient", err);
             onBack();
         } finally {
-            setLoading(false);
+            if (!background) setLoading(false);
         }
     };
 
@@ -117,6 +117,7 @@ export default function PatientDetailsPage({ patientId, onBack }: PatientDetails
                     setEditingVisit(null);
                     setView('ADD_VISIT');
                 }}
+                onVisitDeleted={() => fetchPatientDetails(patientId, true)}
             />
 
             {view === 'ADD_VISIT' && (

@@ -7,6 +7,8 @@ export default function Header() {
     const pathname = usePathname();
     const isLoginPage = pathname === '/login';
 
+    if (isLoginPage) return null;
+
     return (
         <header style={{
             position: 'sticky',
@@ -38,17 +40,8 @@ export default function Header() {
                     fontWeight: 700,
                     letterSpacing: '0.5px'
                 }}>
-                    Pediatric Growth Tracker
+                    PediaCare AI
                 </h1>
-                <p style={{
-                    margin: 0,
-                    fontSize: '0.75rem',
-                    color: 'hsl(var(--text-secondary))',
-                    textTransform: 'uppercase',
-                    letterSpacing: '1px'
-                }}>
-                    pediaTrack
-                </p>
             </div>
 
             {/* Action Portal Target */}
