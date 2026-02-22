@@ -25,6 +25,7 @@ export default function LoginPage() {
 
             localStorage.setItem('token', token);
             localStorage.setItem('role', role);
+            localStorage.setItem('actualRole', role);
             if (patientId) localStorage.setItem('patientId', patientId);
 
             // Force reload to update app state or redirect

@@ -67,6 +67,7 @@ const CustomTooltip = ({ active, payload, label, ageUnit }: any) => {
 export default function ChartViewer({ visits, gender }: ChartViewerProps) {
     const [metric, setMetric] = React.useState<'weight' | 'height' | 'head_circumference'>('weight');
     const [ageUnit, setAgeUnit] = React.useState<'yr' | 'mo' | 'dy'>('yr');
+    const [isFullRange, setIsFullRange] = React.useState(false);
     // Auto-scale age unit based on data
     React.useEffect(() => {
         if (!visits || visits.length === 0) return;
@@ -147,16 +148,20 @@ export default function ChartViewer({ visits, gender }: ChartViewerProps) {
         const valueKey = metric === 'weight' ? 'patientWeight' : (metric === 'height' ? 'patientHeight' : 'patientHC');
         const visitKey = metric === 'weight' ? 'weight' : (metric === 'height' ? 'height' : 'head_circumference');
 
-        const patientPoints = visits.map(v => ({
-            age: v.age,
-            [valueKey]: (v as any)[visitKey] // Cast to any to access dynamic key
-        }));
+        const patientPoints = visits
+            .filter(v => v.visit_type !== 'Initial')
+            .map(v => ({
+                age: v.age,
+                [valueKey]: (v as any)[visitKey] // Cast to any to access dynamic key
+            }));
 
         // Dynamically Filter Standards to "Zoom"
         const maxPatientAge = patientPoints.length > 0 ? Math.max(...patientPoints.map(p => p.age)) : 0;
         let ageLimit = 5; // Default full 5 years
 
-        if (patientPoints.length > 0) {
+        if (isFullRange) {
+            ageLimit = 5;
+        } else if (patientPoints.length > 0) {
             if (maxPatientAge < 0.25) ageLimit = 0.5; // Up to 6 months if baby is < 3mo
             else if (maxPatientAge < 1) ageLimit = 1.2; // Up to 1.2y if baby < 1y
             else if (maxPatientAge < 2) ageLimit = 2.5;
@@ -166,7 +171,7 @@ export default function ChartViewer({ visits, gender }: ChartViewerProps) {
         const filteredStandards = standards.filter(s => s.age <= ageLimit);
 
         return mergeData(filteredStandards, patientPoints, valueKey);
-    }, [visits, gender, metric]);
+    }, [visits, gender, metric, isFullRange]);
 
     // Transform Data based on Age Unit
     const displayData = useMemo(() => {
@@ -319,19 +324,30 @@ export default function ChartViewer({ visits, gender }: ChartViewerProps) {
                     </button>
                 </div>
 
-                {/* Age Unit Selector */}
-                <div className="flex items-center gap-2">
-                    <span className="text-sm text-muted-foreground font-medium">Age Unit:</span>
-                    <Select value={ageUnit} onValueChange={(v: any) => setAgeUnit(v)}>
-                        <SelectTrigger className="w-[100px] h-9">
-                            <SelectValue placeholder="Unit" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="yr">Years</SelectItem>
-                            <SelectItem value="mo">Months</SelectItem>
-                            <SelectItem value="dy">Days</SelectItem>
-                        </SelectContent>
-                    </Select>
+                {/* Chart Controls */}
+                <div className="flex items-center gap-3">
+                    <Button
+                        variant={isFullRange ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setIsFullRange(!isFullRange)}
+                        className="h-9 font-medium"
+                    >
+                        {isFullRange ? "Auto Zoom View" : "Full Range (0-5y)"}
+                    </Button>
+
+                    <div className="flex items-center gap-2 ml-2">
+                        <span className="text-sm text-muted-foreground font-medium">Age Unit:</span>
+                        <Select value={ageUnit} onValueChange={(v: any) => setAgeUnit(v)}>
+                            <SelectTrigger className="w-[100px] h-9">
+                                <SelectValue placeholder="Unit" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="yr">Years</SelectItem>
+                                <SelectItem value="mo">Months</SelectItem>
+                                <SelectItem value="dy">Days</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
                 </div>
             </div>
             {renderChart()}

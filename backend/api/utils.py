@@ -40,7 +40,7 @@ def analyze_scan_helper(attachment):
         
         # Gemini Vision Model
         llm = ChatGoogleGenerativeAI(
-            model="gemini-2.5-flash-lite",
+            model="gemini-2.5-flash",
             google_api_key=API_KEY,
             temperature=0.2
         )

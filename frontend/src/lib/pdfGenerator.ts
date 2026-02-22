@@ -11,7 +11,7 @@ export const generateVisitPDF = (visit: Visit, patient: Patient) => {
     // --- Header ---
     doc.setFontSize(22);
     doc.setTextColor(40, 40, 40);
-    doc.text("pediaTrack", margin, yPos);
+    doc.text("pediaCare AI", margin, yPos);
 
     doc.setFontSize(10);
     doc.setTextColor(100, 100, 100);

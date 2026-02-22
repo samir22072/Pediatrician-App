@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, Mic, MicOff, Paperclip, Loader2, Bot, User, PanelLeft, Plus, MessageSquare, Copy, FileText, Sparkles, Check, Trash2, Volume2, VolumeX, X, Activity } from 'lucide-react';
+import { Send, Mic, MicOff, Paperclip, Loader2, Bot, User, PanelLeft, Plus, MessageSquare, Copy, FileText, Sparkles, Check, Trash2, Volume2, VolumeX, X, Activity, Shield, UserCircle } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { AIService, VisitService, AttachmentService } from '@/lib/api';
 import { Message, Session } from '@/lib/types';
@@ -46,6 +46,7 @@ export default function AIChat({ patientName, patientId, patientStats, onTransfe
 
     const [interimText, setInterimText] = useState(''); // New State for realtime feedback
     const [userRole, setUserRole] = useState<string | null>(null);
+    const [actualRole, setActualRole] = useState<string | null>(null);
     const [isAnalyzingScan, setIsAnalyzingScan] = useState(false);
 
     // Voice Recording State
@@ -71,7 +72,9 @@ export default function AIChat({ patientName, patientId, patientStats, onTransfe
     useEffect(() => {
         // Check local storage for role
         const role = localStorage.getItem('role');
+        const actRole = localStorage.getItem('actualRole');
         setUserRole(role);
+        setActualRole(actRole);
         const isDoc = role === 'doctor';
 
         if (isDoc) {
@@ -161,9 +164,10 @@ export default function AIChat({ patientName, patientId, patientStats, onTransfe
         }
     };
 
-    const toggleMode = (checked: boolean) => {
-        setIsDoctorMode(checked);
-        handleCreateSession(checked);
+    const toggleMode = () => {
+        const newRole = userRole === 'doctor' ? 'patient' : 'doctor';
+        localStorage.setItem('role', newRole);
+        window.location.reload();
     };
 
     // --- File Upload & Preview Logic ---
@@ -556,13 +560,23 @@ export default function AIChat({ patientName, patientId, patientStats, onTransfe
 
 
 
-                    {/* Doctor Badge - Only show if user is a doctor */}
-                    {userRole === 'doctor' && (
+                    {/* Doctor Mode Toggle - Only show if user is a doctor */}
+                    {actualRole === 'doctor' && (
                         <div className="flex items-center gap-2 px-3 border-l ml-1">
-                            <Badge variant="secondary" className="bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300 gap-1 px-2">
-                                <Activity size={12} />
-                                Doctor Mode
-                            </Badge>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={toggleMode}
+                                className={cn(
+                                    "h-7 text-[10px] gap-1 px-2 font-bold uppercase tracking-wider transition-all",
+                                    userRole === 'patient'
+                                        ? "bg-primary/10 border-primary/50 text-primary hover:bg-primary/20"
+                                        : "bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800"
+                                )}
+                            >
+                                {userRole === 'doctor' ? <Shield size={12} /> : <UserCircle size={12} />}
+                                {userRole === 'doctor' ? 'Doctor Mode' : 'Patient Mode'}
+                            </Button>
                         </div>
                     )}
                 </div>
