@@ -136,14 +136,3 @@ JSON Structure:
 Do not include markdown code blocks, just raw JSON.
 """
 
-HISTORY_SUMMARY_TEMPLATE = """
-Act as a senior pediatrician reviewing a patient's chart.
-Analyze the following 3 most recent visits and provide a brief, high-level summary of the patient's recent medical history. 
-Focus on recurring issues, progress of ongoing treatments, or key observations.
-Keep it under 3-4 sentences.
-
-Recent Visits:
-{visits_text}
-
-Summary:
-"""

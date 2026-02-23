@@ -20,7 +20,7 @@ from .models import Patient, Visit, Attachment, ChatSession, ChatMessage, Vaccin
 from .utils import (
     analyze_scan_helper, get_ai_response, get_llm_chain_response,
     get_pediatric_system_prompt, get_vitals_summary,
-    generate_chat_summary, generate_history_summary
+    generate_chat_summary
 )
 from .serializers import (
     PatientSerializer, PatientDetailSerializer, 
@@ -318,26 +318,7 @@ class AISummarizeView(APIView):
             print(f"LangChain Summary Error: {e}")
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-class AIHistorySummaryView(APIView):
-    def post(self, request):
-        if not API_KEY:
-             return Response({'error': 'Gemini API Key not configured'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-        patient_id = request.data.get('patientId')
-        
-        if not patient_id:
-            return Response({'error': 'Patient ID required'}, status=status.HTTP_400_BAD_REQUEST)
-
-        try:
-            last_visits = Visit.objects.filter(patient_id=patient_id).order_by('-date')[:3]
-            
-            summary = generate_history_summary(last_visits)
-            return Response({'summary': summary})
-
-        except Exception as e:
-            print(f"AI History Summary Error: {e}")
-            return Response({'summary': "Could not generate AI summary at this time."})
-            
 class ScanAnalysisView(APIView):
     def post(self, request):
         if not API_KEY:

@@ -12,8 +12,7 @@ from .models import ScanResult, Vaccination, Patient, Visit, Attachment
 from .prompts import (
     SCAN_ANALYSIS_PROMPT, SCAN_JSON_FORMAT_PROMPT,
     DOCTOR_MODE_SYSTEM_PROMPT, PATIENT_MODE_SYSTEM_PROMPT,
-    ATTACHMENT_ANALYSIS_CONTEXT, FULL_SUMMARY_TEMPLATE,
-    INCREMENTAL_SUMMARY_TEMPLATE, HISTORY_SUMMARY_TEMPLATE
+    INCREMENTAL_SUMMARY_TEMPLATE
 )
 
 load_dotenv()
@@ -249,21 +248,3 @@ def generate_chat_summary(history, patient_id, session):
         })
     
     return result.replace('```json', '').replace('```', '').strip()
-
-def generate_history_summary(last_visits):
-    """
-    Generates a high-level summary of recent medical visits.
-    """
-    if not last_visits:
-        return "No previous visits recorded."
-
-    visits_text = ""
-    for visit in last_visits:
-        visits_text += f"Date: {visit.date}, Type: {visit.visit_type}\n"
-        visits_text += f"Diagnosis: {visit.diagnosis}\n"
-        visits_text += f"Notes: {visit.notes}\n---\n"
-
-    return get_llm_chain_response(HISTORY_SUMMARY_TEMPLATE, {"visits_text": visits_text}, temperature=0.4).strip()
-
-
-
