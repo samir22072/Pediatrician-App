@@ -110,6 +110,7 @@ class VisitCreateView(APIView):
         if serializer.is_valid():
             visit = serializer.save()
             
+            session_id = request.data.get('session_id')
             if session_id:
                 try:
                     session = ChatSession.objects.get(pk=session_id)
