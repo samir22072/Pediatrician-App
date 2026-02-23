@@ -139,12 +139,30 @@ def get_pediatric_system_prompt(patient_id, patient_stats, mode, history, attach
     # 1. Missing Stats Check
     missing_info = []
     if not patient_stats.get('age'): missing_info.append("Age")
-    if not patient_stats.get('weight'): missing_info.append("Weight")
-    if not patient_stats.get('height'): missing_info.append("Height")
+    
+    # Check if we have recent vitals from a visit
+    if patient_id:
+        last_visit = Visit.objects.filter(patient_id=patient_id).order_by('-date').first()
+        if last_visit:
+            if not last_visit.weight: missing_info.append("Weight")
+            if not last_visit.height: missing_info.append("Height")
+        else:
+            # Fallback to patient stats if no visits
+            if not patient_stats.get('weight'): missing_info.append("Weight")
+            if not patient_stats.get('height'): missing_info.append("Height")
+    else:
+        if not patient_stats.get('weight'): missing_info.append("Weight")
+        if not patient_stats.get('height'): missing_info.append("Height")
+    
     
     missing_prompt = ""
     if missing_info:
-        missing_prompt = f"\n\nCRITICAL: The following patient data is MISSING from the record: {', '.join(missing_info)}. You MUST ask the parent for these specific values."
+        missing_prompt = f"\n\nCRITICAL: The patient's record is missing: {', '.join(missing_info)}. You MUST ask the parent for these specific values."
+    else:
+        vitals_text = get_vitals_summary(patient_id)
+        if vitals_text != "None":
+            missing_prompt = f"\n\nNote: We already have recent vitals ({vitals_text}). Do NOT ask for weight, height, or head circumference again unless relevant."
+        
 
     # 2. Vaccination Check
     vaccine_prompt = ""
@@ -259,3 +277,6 @@ def generate_history_summary(last_visits):
         visits_text += f"Notes: {visit.notes}\n---\n"
 
     return get_llm_chain_response(HISTORY_SUMMARY_TEMPLATE, {"visits_text": visits_text}, temperature=0.4).strip()
+
+
+

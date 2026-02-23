@@ -34,12 +34,14 @@ export default function PatientDetails({ patient, onBack, onAddVisit, onEditVisi
     const [editForm, setEditForm] = useState({ modality: '', findings: '', impression: '' });
     const [savingScan, setSavingScan] = useState(false);
     const [userRole, setUserRole] = useState<string | null>(null);
+    const [actualRole, setActualRole] = useState<string | null>(null);
     const [activeTab, setActiveTabState] = useState("ai_triage");
 
     React.useEffect(() => {
         const savedTab = sessionStorage.getItem('patientActiveTab');
         if (savedTab) setActiveTabState(savedTab);
         setUserRole(localStorage.getItem('role'));
+        setActualRole(localStorage.getItem('actualRole'));
     }, []);
 
     const setActiveTab = (val: string) => {
@@ -113,7 +115,7 @@ export default function PatientDetails({ patient, onBack, onAddVisit, onEditVisi
         <div className="flex flex-col h-[calc(100vh-80px)] animate-in fade-in zoom-in-95 duration-500 p-6 gap-6">
             <NavbarActions>
                 <div className="flex items-center gap-2">
-                    {userRole !== 'patient' && (
+                    {(userRole !== 'patient' || actualRole === 'doctor') && (
                         <Button onClick={onBack} variant="outline" className="gap-2">
                             <ArrowLeft size={16} /> Back
                         </Button>
@@ -402,7 +404,7 @@ export default function PatientDetails({ patient, onBack, onAddVisit, onEditVisi
                                                             <Button variant="ghost" size="icon" onClick={() => onEditVisit(visit)}>
                                                                 <Edit size={16} />
                                                             </Button>
-                                                            {userRole === 'doctor' && (
+                                                            {(userRole === 'doctor' || actualRole === 'doctor') && (
                                                                 <Button
                                                                     variant="ghost"
                                                                     size="icon"

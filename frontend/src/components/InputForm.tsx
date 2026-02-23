@@ -37,8 +37,8 @@ export default function InputForm({ onCancel, onSubmit, mode = 'new-patient', in
         heartRate: initialData?.heart_rate || '',
         headCircumference: initialData?.head_circumference || '',
 
-        visitType: initialData?.visitType || ['General'], // Array
-        vaccines: initialData?.vaccines || [], // Array
+        visitType: initialData?.visitType || initialData?.visit_type || ['General'], // Array
+        vaccines: initialData?.vaccines || initialData?.given_vaccines || [], // Array
         diagnosis: initialData?.diagnosis || '',
         notes: initialData?.notes || '',
 
@@ -457,7 +457,7 @@ export default function InputForm({ onCancel, onSubmit, mode = 'new-patient', in
                                         <div className="space-y-2 mb-4">
                                             <Label className="text-xs text-muted-foreground font-semibold">Current Attachments</Label>
                                             <div className="grid gap-2">
-                                                {formData.attachments.map((att, idx) => (
+                                                {formData.attachments.map((att: any, idx: number) => (
                                                     <div key={idx} className="flex justify-between items-center text-sm p-2 bg-secondary/30 rounded-md border border-border/50">
                                                         <a
                                                             href={att.file}
