@@ -21,9 +21,7 @@ class VaccinationSerializer(serializers.ModelSerializer):
 
 class VisitSerializer(serializers.ModelSerializer):
     attachments = AttachmentSerializer(many=True, read_only=True)
-    # Receive vaccines as a list of strings (names) on write
     vaccines = serializers.ListField(child=serializers.CharField(), write_only=True, required=False)
-    # Output names of given vaccines on read (calculated from reverse relation)
     given_vaccines_display = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
@@ -37,16 +35,12 @@ class VisitSerializer(serializers.ModelSerializer):
         vaccines_data = validated_data.pop('vaccines', [])
         visit = Visit.objects.create(**validated_data)
         
-        # Link vaccinations
         if vaccines_data:
-            # Handle comma-sep string if it comes as string (should be handled by ListField but just in case of frontend quirks)
             if isinstance(vaccines_data, str):
                 vaccines_data = vaccines_data.split(',')
             
-            # Find and update Vaccination records
             for v_name in vaccines_data:
                 v_name = v_name.strip()
-                # Find pending or existing record for this patient
                 vac_record = Vaccination.objects.filter(patient=visit.patient, vaccine_name=v_name).first()
                 if vac_record:
                     vac_record.status = 'Given'
@@ -54,11 +48,10 @@ class VisitSerializer(serializers.ModelSerializer):
                     vac_record.given_at = visit.date
                     vac_record.save()
                 else:
-                    # Create ad-hoc record for legacy patients or extra vaccines
                     Vaccination.objects.create(
                         patient=visit.patient,
                         vaccine_name=v_name,
-                        due_date=visit.date, # Fallback due date
+                        due_date=visit.date,
                         status='Given',
                         visit=visit,
                         given_at=visit.date
@@ -70,7 +63,6 @@ class VisitSerializer(serializers.ModelSerializer):
         instance = super().update(instance, validated_data)
 
         if vaccines_data is not None:
-             # First, reset any vaccinations previously linked to this visit (rollback)
             instance.given_vaccines.update(status='Pending', visit=None, given_at=None)
 
             if isinstance(vaccines_data, str):

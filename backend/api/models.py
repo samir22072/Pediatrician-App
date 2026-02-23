@@ -53,13 +53,11 @@ class Visit(models.Model):
     diagnosis = models.TextField(blank=True, null=True)
     notes = models.TextField(blank=True, null=True)
     
-    # Optional Vitals
     temperature = models.FloatField(help_text="Temperature in Fahrenheit", blank=True, null=True)
     blood_pressure = models.CharField(max_length=20, help_text="e.g. 120/80", blank=True, null=True)
     heart_rate = models.IntegerField(help_text="BPM", blank=True, null=True)
     head_circumference = models.FloatField(help_text="Head Circumference in cm", blank=True, null=True)
     
-    # Treatment & Plan
     prescription = models.TextField(blank=True, null=True)
     follow_up_date = models.DateField(blank=True, null=True)
 
@@ -111,4 +109,3 @@ class ScanResult(models.Model):
     def __str__(self):
         return f"Analysis for {self.attachment.name}"
 
-# End of models

@@ -28,7 +28,6 @@ def analyze_scan_helper(attachment):
     Returns a dict with 'findings', 'impression', 'modality'.
     """
     try:
-        # Check if already analyzed
         if hasattr(attachment, 'scan_analysis') and attachment.scan_analysis:
             return {
                 'modality': attachment.scan_analysis.modality,
@@ -38,7 +37,6 @@ def analyze_scan_helper(attachment):
 
         image_path = attachment.file.path
         
-        # Gemini Vision Model
         llm = ChatGoogleGenerativeAI(
             model="gemini-2.5-flash",
             google_api_key=API_KEY,
@@ -63,20 +61,17 @@ def analyze_scan_helper(attachment):
         response = llm.invoke(messages)
         content = response.content
         
-        # Parse JSON
         json_match = re.search(r'\{.*\}', content, re.DOTALL)
         if json_match:
             json_str = json_match.group(0)
             data = json.loads(json_str)
         else:
-            # Fallback
             data = {
                 'modality': 'Unknown',
                 'findings': content,
                 'impression': 'See findings.'
             }
 
-        # Save Result
         ScanResult.objects.create(
             attachment=attachment,
             modality=data.get('modality', 'Unknown'),
@@ -136,18 +131,15 @@ def get_pediatric_system_prompt(patient_id, patient_stats, mode, history, attach
     """
     Builds the complete system prompt for AIChat based on patient context.
     """
-    # 1. Missing Stats Check
     missing_info = []
     if not patient_stats.get('age'): missing_info.append("Age")
     
-    # Check if we have recent vitals from a visit
     if patient_id:
         last_visit = Visit.objects.filter(patient_id=patient_id).order_by('-date').first()
         if last_visit:
             if not last_visit.weight: missing_info.append("Weight")
             if not last_visit.height: missing_info.append("Height")
         else:
-            # Fallback to patient stats if no visits
             if not patient_stats.get('weight'): missing_info.append("Weight")
             if not patient_stats.get('height'): missing_info.append("Height")
     else:
@@ -164,7 +156,6 @@ def get_pediatric_system_prompt(patient_id, patient_stats, mode, history, attach
             missing_prompt = f"\n\nNote: We already have recent vitals ({vitals_text}). Do NOT ask for weight, height, or head circumference again unless relevant."
         
 
-    # 2. Vaccination Check
     vaccine_prompt = ""
     if patient_id:
         pending_vax_qs = Vaccination.objects.filter(
@@ -178,20 +169,17 @@ def get_pediatric_system_prompt(patient_id, patient_stats, mode, history, attach
             vaccine_list = ", ".join(pending_vaccines)
             vaccine_prompt = f"\n\n**Vaccination Check**: The patient is due/overdue for the following vaccines: {vaccine_list}. Ask if any of these have been administered recently by another doctor."
 
-    # 3. Age Context
     age_val = patient_stats.get('age')
     age_prompt = ""
     if age_val:
         age_prompt = f"\n\n**Patient Age**: {age_val}. Adjust your questions to be appropriate for a child of this age."
 
-    # 4. Mode Logic
     if mode == 'doctor':
         system_prompt_content = DOCTOR_MODE_SYSTEM_PROMPT.format(
             age_prompt=age_prompt,
             missing_prompt=missing_prompt
         )
     else:
-        # Default "Patient/Parent" Mode
         ai_msg_count = sum(1 for m in history if m.get('role') == 'ai' or m.get('sender') == 'ai')
         
         limit_prompt = ""
@@ -207,7 +195,6 @@ def get_pediatric_system_prompt(patient_id, patient_stats, mode, history, attach
             limit_prompt=limit_prompt
         )
 
-    # 5. Attachment Context
     if attachment_id:
         try:
             attachment = Attachment.objects.get(id=attachment_id)

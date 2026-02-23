@@ -14,8 +14,6 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
 from django.db.models import Avg, Count
-
-# LangChain Imports
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 
 from .models import Patient, Visit, Attachment, ChatSession, ChatMessage, Vaccination, ScanResult
@@ -29,11 +27,8 @@ from .serializers import (
     VisitSerializer, AttachmentSerializer
 )
 
-# Load env variables
-load_dotenv()
 API_KEY = os.getenv("GEMINI_API_KEY")
 
-# --- Authentication Views ---
 class LoginView(APIView):
     permission_classes = [AllowAny]
 
@@ -64,7 +59,6 @@ class PatientListView(APIView):
         if request.user.is_staff:
             patients = Patient.objects.all().order_by('-created_at')
         else:
-            # Patients can only see their own profile
             patients = Patient.objects.filter(user=request.user)
             
         serializer = PatientSerializer(patients, many=True, context={'request': request})
@@ -79,10 +73,8 @@ class PatientCreateView(APIView):
         if serializer.is_valid():
             patient = serializer.save()
             
-            # Auto-create User
             try:
                 username = patient.name.lower().replace(" ", "")
-                # Simple uniquifier if needed
                 if User.objects.filter(username=username).exists():
                     username = f"{username}{random.randint(100, 999)}"
                 
@@ -90,15 +82,11 @@ class PatientCreateView(APIView):
                 patient.user = user
                 patient.save()
                 
-                # Update response data to include creds (optional but helpful)
-                data = serializer.data
-                data['username'] = username
-                data['temp_password'] = 'password123'
-                return Response(data, status=status.HTTP_201_CREATED)
+                
+                return Response(serializer.data, status=status.HTTP_201_CREATED)
                 
             except Exception as e:
                 print(f"Error creating user: {e}")
-                # Return success for patient but warn about user
                 return Response(serializer.data, status=status.HTTP_201_CREATED)
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -122,13 +110,9 @@ class VisitCreateView(APIView):
         if serializer.is_valid():
             visit = serializer.save()
             
-            # --- Link Session Attachments ---
-            session_id = request.data.get('sessionId') # Note camelCase from frontend usually
-            
             if session_id:
                 try:
                     session = ChatSession.objects.get(pk=session_id)
-                    # Find attachments for this session that have NO visit
                     attachments = Attachment.objects.filter(session=session, visit__isnull=True)
                     
                     if attachments.exists():
@@ -175,8 +159,6 @@ class DashboardView(APIView):
     def post(self, request):
         total_patients = Patient.objects.count()
         total_visits = Visit.objects.count()
-        
-        # Average age of all visits recorded is simple:
         avg_visit_age = Visit.objects.aggregate(Avg('age'))['age__avg'] or 0
         
         return Response({
@@ -196,7 +178,6 @@ class AIChatView(APIView):
             return Response({'error': 'Message content is required'}, status=status.HTTP_400_BAD_REQUEST)
         
         try:
-            # Gather context-dependent system prompt via helper
             patient_id = request.data.get('patientId')
             patient_stats = request.data.get('patientStats', {})
             mode = request.data.get('mode', 'patient')
@@ -210,7 +191,6 @@ class AIChatView(APIView):
                 attachment_id=attachment_id
             )
 
-            # Get structured findings if needed for response
             structured_findings = None
             if attachment_id:
                 try:
@@ -219,7 +199,6 @@ class AIChatView(APIView):
                 except Exception:
                     pass
 
-            # Construct Message History
             messages = [
                 SystemMessage(content=system_prompt_content)
             ]
@@ -230,21 +209,19 @@ class AIChatView(APIView):
                 elif msg.get('role') == 'ai':
                     messages.append(AIMessage(content=msg.get('text', '')))
             
-            # Add current user message
+            
             messages.append(HumanMessage(content=current_message))
             
-            # Save User Message to DB
             if patient_id:
                 try:
                     patient_obj = Patient.objects.get(pk=patient_id)
                     
-                    # Find or convert session
+                    
                     session_id = request.data.get('sessionId')
                     if session_id:
                         try:
                             session = ChatSession.objects.get(pk=session_id)
                         except ChatSession.DoesNotExist:
-                             # Fallback create
                              session = ChatSession.objects.create(patient=patient_obj)
                     else:
                         session = ChatSession.objects.filter(patient=patient_obj).order_by('-updated_at').first()
@@ -261,11 +238,9 @@ class AIChatView(APIView):
                     patient_obj = None
                     session = None
 
-            # Get AI response
             response = get_ai_response(messages)
             content = response.content
             
-            # Extract text content safely if using Gemini (LangChain response)
             if isinstance(content, str) and content.strip().startswith('['):
                 try:
                     parsed_content = json.loads(content)
@@ -282,7 +257,6 @@ class AIChatView(APIView):
             elif not isinstance(content, str):
                 content = str(content)
 
-            # Save AI Response to DB
             if session:
                 ChatMessage.objects.create(
                     session=session,
@@ -293,7 +267,7 @@ class AIChatView(APIView):
             return Response({
                 'text': content, 
                 'sessionId': session.id if session else None,
-                'structured_findings': structured_findings # Include structured_findings in the response
+                'structured_findings': structured_findings
             })
             
         except Exception as e:
@@ -309,7 +283,6 @@ class AISummarizeView(APIView):
         patient_id = request.data.get('patientId')
         session_id = request.data.get('sessionId')
         
-        # --- Caching Logic ---
         session = None
         if session_id:
             try:
@@ -333,7 +306,6 @@ class AISummarizeView(APIView):
         try:
             cleaned_result = generate_chat_summary(history, patient_id, session)
             
-            # --- Save to Cache ---
             if session:
                 session.summary = cleaned_result
                 session.cached_message_count = len(history)
@@ -356,7 +328,6 @@ class AIHistorySummaryView(APIView):
             return Response({'error': 'Patient ID required'}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            # Fetch last 3 visits
             last_visits = Visit.objects.filter(patient_id=patient_id).order_by('-date')[:3]
             
             summary = generate_history_summary(last_visits)
@@ -364,7 +335,6 @@ class AIHistorySummaryView(APIView):
 
         except Exception as e:
             print(f"AI History Summary Error: {e}")
-            # Fallback instead of 500 to keep UI smooth
             return Response({'summary': "Could not generate AI summary at this time."})
             
 class ScanAnalysisView(APIView):
@@ -412,7 +382,6 @@ class ChatSessionListView(APIView):
         if not patient_id:
             return Response({'error': 'Patient ID required'}, status=status.HTTP_400_BAD_REQUEST)
         
-        # Annotate with message count and filter > 0
         sessions = ChatSession.objects.filter(patient_id=patient_id).annotate(msg_count=Count('messages')).filter(msg_count__gt=0).order_by('-updated_at')
         data = [{'id': str(s.id), 'name': s.name, 'updated_at': s.updated_at} for s in sessions]
         return Response(data)
@@ -431,11 +400,10 @@ class ChatSessionMessagesView(APIView):
                 'sender': m.sender, 
                 'text': m.text, 
                 'timestamp': m.timestamp,
-                'structured_data': None # Add if we start storing it on message level
+                'structured_data': None
             }
             if m.attachment:
                 msg_data['imageUrl'] = m.attachment.file.url
-                # Also include scan analysis if any
                 if hasattr(m.attachment, 'scan_analysis'):
                      msg_data['structured_data'] = {
                          'modality': m.attachment.scan_analysis.modality,
