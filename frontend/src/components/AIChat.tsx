@@ -561,7 +561,7 @@ export default function AIChat({ patientName, patientId, patientStats, onTransfe
                                     <Button
                                         variant="outline"
                                         size="sm"
-                                        onClick={handleGenerateReport}
+                                        onClick={() => handleGenerateReport()}
                                         disabled={isTyping || isAnalyzingScan}
                                         className="h-8 gap-2 text-xs font-semibold sm:text-sm text-primary border-primary/20 hover:bg-primary/5 px-3"
                                     >
