@@ -184,7 +184,7 @@ export default function ChartViewer({ visits, gender }: ChartViewerProps) {
     const renderChart = () => {
         let title = 'Weight-for-Age';
         let dataKey = 'patientWeight';
-        let color = 'hsl(var(--primary))';
+        let color = 'hsl(214, 95%, 53%)'; // Medical Blue
         let unit = 'Weight (kg)';
 
         if (metric === 'height') {

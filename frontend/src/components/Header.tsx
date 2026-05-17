@@ -14,39 +14,57 @@ export default function Header() {
             position: 'sticky',
             top: 0,
             zIndex: 50,
-            backgroundColor: 'var(--glass-bg)',
-            backdropFilter: 'blur(var(--glass-blur))',
-            borderBottom: '1px solid var(--glass-border)',
-            padding: '1rem 2rem',
+            backgroundColor: '#ffffff',
+            backdropFilter: 'blur(12px)',
+            borderBottom: '1px solid hsl(214, 32%, 91%)',
+            padding: '0 2rem',
+            height: '64px',
             display: 'flex',
             alignItems: 'center',
-            gap: '1rem'
+            gap: '0.75rem',
+            boxShadow: '0 1px 3px 0 rgba(0,0,0,0.06), 0 1px 2px -1px rgba(0,0,0,0.04)'
         }}>
+            {/* Logo Icon */}
             <div style={{
                 padding: '0.5rem',
-                backgroundColor: 'rgba(14, 165, 233, 0.15)',
-                borderRadius: '50%',
+                backgroundColor: 'hsl(180, 75%, 19%, 0.1)',
+                borderRadius: '10px',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                boxShadow: '0 0 15px var(--primary-glow)'
+                border: '1px solid hsl(180, 75%, 19%, 0.15)'
             }}>
-                <Activity color="hsl(var(--primary))" size={24} />
+                <Activity color="hsl(180, 75%, 22%)" size={20} />
             </div>
+
+            {/* Title */}
             <div>
                 <h1 style={{
                     margin: 0,
-                    fontSize: '1.25rem',
+                    fontSize: '1.0625rem',
                     fontWeight: 700,
-                    letterSpacing: '0.5px'
+                    color: 'hsl(215, 28%, 17%)',
+                    letterSpacing: '-0.01em',
+                    lineHeight: 1.2
                 }}>
                     PediaCare AI
                 </h1>
+                <p style={{
+                    margin: 0,
+                    fontSize: '0.6875rem',
+                    color: 'hsl(215, 20%, 55%)',
+                    fontWeight: 500,
+                    letterSpacing: '0.02em',
+                    textTransform: 'uppercase'
+                }}>
+                    Pediatric Clinic Management
+                </p>
             </div>
 
-            {/* Action Portal Target */}
-            <div id="navbar-actions" style={{ marginLeft: 'auto', display: 'flex', gap: '1rem', alignItems: 'center' }}></div>
+            {/* Spacer + Actions Portal */}
+            <div id="navbar-actions" style={{ marginLeft: 'auto', display: 'flex', gap: '0.75rem', alignItems: 'center' }} />
 
+            {/* Logout */}
             {!isLoginPage && (
                 <button
                     onClick={() => {
@@ -55,20 +73,29 @@ export default function Header() {
                         });
                     }}
                     style={{
-                        padding: '0.5rem 1rem',
+                        padding: '0.4375rem 0.875rem',
                         borderRadius: '0.5rem',
-                        backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                        color: '#ef4444',
-                        border: '1px solid rgba(239, 68, 68, 0.2)',
+                        backgroundColor: 'transparent',
+                        color: 'hsl(215, 20%, 50%)',
+                        border: '1px solid hsl(214, 32%, 88%)',
                         cursor: 'pointer',
-                        fontSize: '0.875rem',
-                        fontWeight: 600,
-                        transition: 'all 0.2s ease',
-                        marginLeft: '1rem'
+                        fontSize: '0.8125rem',
+                        fontWeight: 500,
+                        transition: 'all 0.15s ease',
+                        marginLeft: '0.5rem'
                     }}
-                    className="hover:bg-red-500/20"
+                    onMouseEnter={e => {
+                        (e.target as HTMLButtonElement).style.backgroundColor = 'hsl(0, 72%, 98%)';
+                        (e.target as HTMLButtonElement).style.color = 'hsl(0, 72%, 45%)';
+                        (e.target as HTMLButtonElement).style.borderColor = 'hsl(0, 72%, 80%)';
+                    }}
+                    onMouseLeave={e => {
+                        (e.target as HTMLButtonElement).style.backgroundColor = 'transparent';
+                        (e.target as HTMLButtonElement).style.color = 'hsl(215, 20%, 50%)';
+                        (e.target as HTMLButtonElement).style.borderColor = 'hsl(214, 32%, 88%)';
+                    }}
                 >
-                    Logout
+                    Sign out
                 </button>
             )}
         </header>

@@ -183,6 +183,7 @@ class AIChatView(APIView):
             patient_stats = request.data.get('patientStats', {})
             mode = request.data.get('mode', 'patient')
             attachment_id = request.data.get('attachmentId')
+            model_name = request.data.get('modelName', 'gemini-2.5-flash-lite')
             
             system_prompt_content = get_pediatric_system_prompt(
                 patient_id=patient_id,
@@ -239,7 +240,7 @@ class AIChatView(APIView):
                     patient_obj = None
                     session = None
 
-            response = get_ai_response(messages)
+            response = get_ai_response(messages, model=model_name)
             content = response.content
             
             if isinstance(content, str) and content.strip().startswith('['):
@@ -283,6 +284,7 @@ class AISummarizeView(APIView):
         history = request.data.get('history', [])
         patient_id = request.data.get('patientId')
         session_id = request.data.get('sessionId')
+        model_name = request.data.get('modelName', 'gemini-flash-latest')
         
         session = None
         if session_id:
@@ -305,7 +307,7 @@ class AISummarizeView(APIView):
             ).values_list('vaccine_name', flat=True))
         
         try:
-            cleaned_result = generate_chat_summary(history, patient_id, session)
+            cleaned_result = generate_chat_summary(history, patient_id, session, model=model_name)
             
             if session:
                 session.summary = cleaned_result

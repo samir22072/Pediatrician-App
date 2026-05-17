@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
-import { User, Plus, ChevronRight, Activity, Search, Users, Baby, ClipboardList, Stethoscope } from 'lucide-react';
+import { Plus, ChevronRight, Search, Users, Baby, ClipboardList } from 'lucide-react';
 import { Patient } from '@/lib/types';
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent } from "@/components/ui/card"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Badge } from "@/components/ui/badge"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { cn } from "@/lib/utils"
+
+import NavbarActions from './NavbarActions';
 
 interface PatientListProps {
     patients: Patient[];
@@ -21,11 +22,9 @@ export default function PatientList({ patients, onSelectPatient, onAddNew }: Pat
         p.name.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
-    // Stats
     const totalPatients = patients.length;
     const totalVisits = patients.reduce((acc, p) => acc + (p.visits?.filter(v => v.visit_type !== 'Initial').length || 0), 0);
 
-    // Calculate Average Age
     const validAges = patients
         .map(p => p.visits && p.visits.length > 0 ? p.visits[p.visits.length - 1].age : null)
         .filter(age => age !== null) as number[];
@@ -34,125 +33,152 @@ export default function PatientList({ patients, onSelectPatient, onAddNew }: Pat
         : '0';
 
     return (
-        <div className="space-y-8 p-6 animate-in fade-in zoom-in-95 duration-500">
-            {/* Top Bar */}
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                <div className="relative w-full sm:w-[350px]">
+        <div className="min-h-[calc(100vh-64px)] bg-background">
+            {/* Global Navbar Actions */}
+            <NavbarActions>
+                <div className="flex items-center gap-2">
+                    <Button
+                        onClick={onAddNew}
+                        className="gap-2 bg-white text-teal-700 hover:bg-teal-50 border-0 shadow-md font-bold px-5"
+                    >
+                        <Plus size={18} strokeWidth={3} /> Add New Patient
+                    </Button>
+                </div>
+            </NavbarActions>
+
+            <div className="max-w-7xl mx-auto p-6 space-y-8">
+                {/* Stats Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <StatsCard
+                        icon={<Users size={20} className="text-teal-700" />}
+                        iconBg="bg-teal-50 border border-teal-100"
+                        label="Total Patients"
+                        value={totalPatients}
+                        accent="border-l-[3px] border-l-teal-600"
+                    />
+                    <StatsCard
+                        icon={<ClipboardList size={20} className="text-emerald-700" />}
+                        iconBg="bg-emerald-50 border border-emerald-100"
+                        label="Total Visits"
+                        value={totalVisits}
+                        accent="border-l-[3px] border-l-emerald-600"
+                    />
+                    <StatsCard
+                        icon={<Baby size={20} className="text-amber-700" />}
+                        iconBg="bg-amber-50 border border-amber-100"
+                        label="Average Age"
+                        value={`${avgAge} yrs`}
+                        accent="border-l-[3px] border-l-amber-500"
+                    />
+                </div>
+
+                {/* Search */}
+                <div className="relative w-full sm:w-[360px]">
                     <Search
-                        size={18}
+                        size={16}
                         className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
                     />
                     <Input
                         type="text"
-                        placeholder="Search patients..."
-                        className="pl-10 h-10 bg-background"
+                        placeholder="Search patients by name..."
+                        className="pl-9 h-11 bg-white border-slate-200 shadow-sm focus-visible:ring-teal-500/30 focus-visible:ring-2 focus-visible:ring-offset-0 transition-all"
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                     />
                 </div>
-                <Button onClick={onAddNew} size="lg" className="w-full sm:w-auto shadow-md">
-                    <Plus size={18} className="mr-2" /> New Patient
-                </Button>
-            </div>
 
-            {/* Stats Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <StatsCard
-                    icon={<Users size={24} className="text-blue-500" />}
-                    label="Total Patients"
-                    value={totalPatients}
-                    className="border-l-4 border-l-blue-500"
-                />
-                <StatsCard
-                    icon={<ClipboardList size={24} className="text-green-500" />}
-                    label="Total Visits"
-                    value={totalVisits}
-                    className="border-l-4 border-l-green-500"
-                />
-                <StatsCard
-                    icon={<Baby size={24} className="text-orange-500" />}
-                    label="Avg. Age"
-                    value={`${avgAge} yrs`}
-                    className="border-l-4 border-l-orange-500"
-                />
-            </div>
+                {/* Patient Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                    {filtered.map(patient => (
+                        <Card
+                            key={patient.id}
+                            className="group relative overflow-hidden cursor-pointer bg-white border border-border hover:border-teal-300 hover:shadow-md transition-all duration-200 hover:-translate-y-0.5"
+                            onClick={() => onSelectPatient(patient.id.toString())}
+                        >
+                            {/* Left accent bar */}
+                            <div className="absolute top-0 left-0 w-[3px] h-full bg-slate-100 group-hover:bg-primary transition-colors duration-200 rounded-l-lg" />
 
-            {/* Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                {filtered.map(patient => (
-                    <Card
-                        key={patient.id}
-                        className="group overflow-hidden cursor-pointer hover:shadow-lg hover:border-primary/50 transition-all duration-300 hover:-translate-y-1"
-                        onClick={() => onSelectPatient(patient.id.toString())}
-                    >
-                        <div className="absolute top-0 left-0 w-1 h-full bg-muted-foreground/20 group-hover:bg-primary transition-colors" />
-
-                        <CardContent className="p-5 pl-7 flex flex-col gap-4 h-full">
-                            <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-4">
-                                    <Avatar className="h-12 w-12 border-2 border-background shadow-sm">
-                                        <AvatarFallback className={cn(
-                                            "text-lg font-bold",
-                                            patient.gender === 'Male' ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" : "bg-pink-100 text-pink-700 dark:bg-pink-900/30 dark:text-pink-400"
-                                        )}>
-                                            {patient.name.charAt(0)}
-                                        </AvatarFallback>
-                                    </Avatar>
-                                    <div>
-                                        <h3 className="font-semibold text-lg leading-none">{patient.name}</h3>
-                                        <div className="text-sm text-muted-foreground mt-1 flex items-center gap-2">
-                                            <span>{patient.gender}</span>
-                                            <span className="h-1 w-1 rounded-full bg-muted-foreground/50" />
-                                            <span>{patient.dob}</span>
+                            <CardContent className="p-5 pl-6 flex flex-col gap-4 h-full">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-3">
+                                        <Avatar className="h-11 w-11 border-2 border-slate-100 shadow-sm">
+                                            <AvatarFallback className={cn(
+                                                "text-base font-bold",
+                                                patient.gender === 'Male'
+                                                    ? "bg-sky-50 text-sky-700"
+                                                    : "bg-rose-50 text-rose-600"
+                                            )}>
+                                                {patient.name.charAt(0)}
+                                            </AvatarFallback>
+                                        </Avatar>
+                                        <div>
+                                            <h3 className="font-semibold text-sm leading-none text-foreground group-hover:text-primary transition-colors">{patient.name}</h3>
+                                            <div className="text-xs text-muted-foreground mt-1.5 flex items-center gap-1.5">
+                                                <span className={cn(
+                                                    "px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide",
+                                                    patient.gender === 'Male'
+                                                        ? "bg-sky-50 text-sky-700"
+                                                        : "bg-rose-50 text-rose-600"
+                                                )}>{patient.gender}</span>
+                                                <span className="text-muted-foreground/40">•</span>
+                                                <span>{patient.dob}</span>
+                                            </div>
                                         </div>
                                     </div>
+                                    <ChevronRight className="text-muted-foreground/30 group-hover:text-primary/60 transition-colors" size={18} />
                                 </div>
-                                <ChevronRight className="text-muted-foreground/50 group-hover:text-primary transition-colors" size={20} />
-                            </div>
 
-                            <div className="mt-auto pt-4 border-t border-border flex justify-between items-end text-sm">
-                                <div>
-                                    <p className="text-muted-foreground text-xs uppercase tracking-wider font-medium">Last Visit</p>
-                                    <p className="font-semibold mt-1">
-                                        {patient.visits && patient.visits.length > 0
-                                            ? patient.visits[patient.visits.length - 1].date
-                                            : 'Never'}
-                                    </p>
+                                <div className="mt-auto pt-3 border-t border-border/60 flex justify-between items-end text-xs">
+                                    <div>
+                                        <p className="text-muted-foreground uppercase tracking-wider font-medium text-[10px]">Last Visit</p>
+                                        <p className="font-semibold mt-0.5 text-foreground">
+                                            {patient.visits && patient.visits.length > 0
+                                                ? patient.visits[patient.visits.length - 1].date
+                                                : <span className="text-muted-foreground italic font-normal">Never</span>}
+                                        </p>
+                                    </div>
+                                    <div className="text-right">
+                                        <p className="text-muted-foreground uppercase tracking-wider font-medium text-[10px]">Current Age</p>
+                                        <p className="font-semibold mt-0.5 text-foreground">
+                                            {patient.visits && patient.visits.length > 0
+                                                ? `${patient.visits[patient.visits.length - 1].age} yrs`
+                                                : <span className="text-muted-foreground italic font-normal">Newborn</span>}
+                                        </p>
+                                    </div>
                                 </div>
-                                <div className="text-right">
-                                    <p className="text-muted-foreground text-xs uppercase tracking-wider font-medium">Current Age</p>
-                                    <p className="font-semibold mt-1">
-                                        {patient.visits && patient.visits.length > 0
-                                            ? `${patient.visits[patient.visits.length - 1].age} yrs`
-                                            : <span className="text-muted-foreground italic">Newborn</span>}
-                                    </p>
-                                </div>
-                            </div>
-                        </CardContent>
-                    </Card>
-                ))}
-            </div>
-
-            {filtered.length === 0 && (
-                <div className="text-center py-20 bg-muted/20 rounded-lg border border-dashed text-muted-foreground">
-                    <Search className="mx-auto h-12 w-12 opacity-20 mb-4" />
-                    <p className="text-lg">No patients found matching criteria.</p>
+                            </CardContent>
+                        </Card>
+                    ))}
                 </div>
-            )}
+
+                {filtered.length === 0 && (
+                    <div className="text-center py-20 bg-white rounded-xl border border-dashed border-border text-muted-foreground">
+                        <Search className="mx-auto h-10 w-10 opacity-20 mb-3" />
+                        <p className="text-base font-medium">No patients found</p>
+                        <p className="text-sm mt-1 opacity-70">Try a different search term</p>
+                    </div>
+                )}
+            </div>
         </div>
     );
-};
+}
 
-function StatsCard({ icon, label, value, className }: { icon: React.ReactNode, label: string, value: string | number, className?: string }) {
+function StatsCard({ icon, iconBg, label, value, accent }: {
+    icon: React.ReactNode;
+    iconBg: string;
+    label: string;
+    value: string | number;
+    accent: string;
+}) {
     return (
-        <Card className={cn("overflow-hidden", className)}>
-            <CardContent className="p-6 flex items-center gap-4">
-                <div className="h-12 w-12 rounded-full bg-background border shadow-sm flex items-center justify-center shrink-0">
+        <Card className={cn("overflow-hidden bg-white border-border shadow-sm", accent)}>
+            <CardContent className="p-5 flex items-center gap-4">
+                <div className={cn("h-11 w-11 rounded-xl flex items-center justify-center shrink-0", iconBg)}>
                     {icon}
                 </div>
                 <div>
-                    <p className="text-sm font-medium text-muted-foreground">{label}</p>
-                    <p className="text-2xl font-bold">{value}</p>
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{label}</p>
+                    <p className="text-2xl font-bold text-foreground tracking-tight mt-0.5">{value}</p>
                 </div>
             </CardContent>
         </Card>

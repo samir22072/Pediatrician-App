@@ -189,10 +189,10 @@ export default function InputForm({ onCancel, onSubmit, mode = 'new-patient', in
     const isVisit = mode === 'add-visit' || mode === 'edit-visit';
 
     return (
-        <Card className="w-full h-full max-h-[90vh] overflow-hidden border-0 shadow-none sm:border sm:shadow-lg flex flex-col">
-            <CardHeader className="border-b bg-muted/40 pb-4 shrink-0">
-                <CardTitle className="text-xl text-primary flex items-center gap-2">
-                    {mode === 'new-patient' ? 'New Patient Registration' : mode === 'edit-visit' ? 'Update Visit' : 'Add New Visit'}
+        <Card className="w-full h-full max-h-[90vh] overflow-hidden border-0 shadow-none sm:border sm:shadow-md flex flex-col bg-white">
+            <CardHeader className="border-b border-border bg-slate-50 pb-4 shrink-0">
+                <CardTitle className="text-xl text-primary font-bold flex items-center gap-2">
+                    {mode === 'new-patient' ? '🏥 New Patient Registration' : mode === 'edit-visit' ? '✏️ Update Visit' : '➕ Add New Visit'}
                 </CardTitle>
             </CardHeader>
 
@@ -240,8 +240,8 @@ export default function InputForm({ onCancel, onSubmit, mode = 'new-patient', in
                                 <Input type="number" name="motherHeight" value={formData.motherHeight} onChange={handleChange} step="0.1" className="bg-background" />
                             </div>
 
-                            <div className="col-span-1 md:col-span-2 pt-4 border-t">
-                                <Label className="text-primary text-base">Initial Vitals (Optional)</Label>
+                            <div className="col-span-1 md:col-span-2 pt-4 border-t border-border">
+                                <Label className="text-teal-700 text-base font-semibold">Initial Vitals (Optional)</Label>
                             </div>
                             <div className="space-y-2">
                                 <Label>Weight (kg)</Label>
@@ -391,7 +391,7 @@ export default function InputForm({ onCancel, onSubmit, mode = 'new-patient', in
                                     <Label>Prescription / Treatment Plan</Label>
                                     <Textarea
                                         name="prescription"
-                                        className="flex-1 min-h-[120px] resize-none border-blue-500/30 bg-background/50 leading-relaxed"
+                                        className="flex-1 min-h-[120px] resize-none border-teal-400/40 focus:border-teal-500 bg-background/50 leading-relaxed"
                                         value={formData.prescription}
                                         onChange={handleChange}
                                         placeholder="Rx..."
@@ -508,7 +508,7 @@ export default function InputForm({ onCancel, onSubmit, mode = 'new-patient', in
                     )}
                 </form>
             </div>
-            <CardFooter className="shrink-0 flex gap-4 border-t bg-muted/40 p-6 pt-4">
+            <CardFooter className="shrink-0 flex gap-4 border-t border-border bg-slate-50 p-6 pt-4">
                 <Button type="button" variant="outline" className="flex-1" onClick={onCancel}>
                     Cancel
                 </Button>

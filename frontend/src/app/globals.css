@@ -1,42 +1,60 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
   :root {
-    --background: 222 47% 11%;
-    --foreground: 210 40% 98%;
+    /* === Core Surface === */
+    --background: 210 20% 98%;       /* #F8FAFC — warm off-white page bg */
+    --foreground: 215 28% 17%;       /* #1E293B — dark slate text */
 
-    --card: 217 33% 17%;
-    --card-foreground: 210 40% 98%;
+    /* === Cards & Popovers === */
+    --card: 0 0% 100%;               /* #FFFFFF — pure white cards */
+    --card-foreground: 215 28% 17%;
 
-    --popover: 217 33% 17%;
-    --popover-foreground: 210 40% 98%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 215 28% 17%;
 
-    --primary: 199 89% 48%;
+    /* === Primary: Deep Clinical Teal === */
+    --primary: 180 75% 19%;          /* #0C4A50 */
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 217 33% 17%;
-    --secondary-foreground: 210 40% 98%;
+    /* === Secondary: Light Slate === */
+    --secondary: 210 40% 95%;        /* #EFF6FF light slate */
+    --secondary-foreground: 215 28% 25%;
 
-    --muted: 215 25% 27%;
-    --muted-foreground: 215 20% 65%;
+    /* === Muted: Very Light Gray === */
+    --muted: 210 40% 96%;            /* #F1F5F9 */
+    --muted-foreground: 215 20% 50%; /* #64748B */
 
-    --accent: 215 25% 27%;
-    --accent-foreground: 210 40% 98%;
+    /* === Accent === */
+    --accent: 210 40% 93%;           /* #E2EAF4 */
+    --accent-foreground: 215 28% 17%;
 
-    --destructive: 0 84% 60%;
-    --destructive-foreground: 210 40% 98%;
+    /* === Semantic === */
+    --destructive: 0 72% 51%;        /* #DC2626 */
+    --destructive-foreground: 0 0% 100%;
 
-    --border: 215 25% 27%;
-    --input: 215 25% 27%;
-    --ring: 199 89% 48%;
+    /* === Borders & Inputs === */
+    --border: 214 32% 91%;           /* #E2E8F0 */
+    --input: 214 32% 91%;
+    --ring: 180 75% 25%;             /* teal focus ring */
 
-    --radius: 0.75rem;
+    /* === Radius === */
+    --radius: 0.625rem;
 
-    /* Custom success/warning for reference */
-    --success: 142 71% 45%;
-    --warning: 45 93% 47%;
+    /* === Clinical Status Colors === */
+    --success: 142 71% 40%;
+    --warning: 38 92% 50%;
+    --info: 199 89% 48%;
+
+    /* === Glow (for subtle highlights) === */
+    --primary-glow: rgba(12, 74, 80, 0.12);
+    --glass-bg: rgba(255, 255, 255, 0.90);
+    --glass-blur: 12px;
+    --glass-border: rgba(226, 232, 240, 0.8);
   }
 }
 
@@ -45,30 +63,69 @@
     @apply border-border;
   }
 
+  html {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
   body {
     @apply bg-background text-foreground;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   }
 }
 
-/* Custom Date Picker Styling */
+/* === Custom Date Picker Styling === */
 .hide-date-icon::-webkit-calendar-picker-indicator {
   display: none;
 }
 
-/* Scrollbar */
+/* === Custom Scrollbar (light theme) === */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: transparent;
+  background: hsl(210 40% 96%);
+  border-radius: 999px;
 }
 
 ::-webkit-scrollbar-thumb {
-  @apply bg-accent rounded-full border-2 border-transparent bg-clip-content;
+  background: hsl(214 32% 82%);
+  border-radius: 999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  @apply bg-primary;
+  background: hsl(180 75% 30%);
+}
+
+/* === Utility: subtle card shadow === */
+.card-shadow {
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.06), 0 1px 2px -1px rgba(0, 0, 0, 0.04);
+}
+
+.card-shadow-md {
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+}
+
+/* === Prose overrides for light theme AI chat === */
+.prose h1, .prose h2, .prose h3 {
+  color: hsl(215 28% 17%);
+}
+
+.prose p, .prose li {
+  color: hsl(215 20% 35%);
+}
+
+.prose strong {
+  color: hsl(215 28% 17%);
+}
+
+.prose code {
+  background: hsl(210 40% 95%);
+  color: hsl(180 75% 25%);
+  padding: 0.1em 0.35em;
+  border-radius: 0.25rem;
+  font-size: 0.85em;
 }

@@ -12,7 +12,7 @@ from .models import ScanResult, Vaccination, Patient, Visit, Attachment
 from .prompts import (
     SCAN_ANALYSIS_PROMPT, SCAN_JSON_FORMAT_PROMPT,
     DOCTOR_MODE_SYSTEM_PROMPT, PATIENT_MODE_SYSTEM_PROMPT,
-    INCREMENTAL_SUMMARY_TEMPLATE
+    INCREMENTAL_SUMMARY_TEMPLATE, FULL_SUMMARY_TEMPLATE
 )
 
 load_dotenv()
@@ -98,16 +98,17 @@ def get_llm_chain_response(template, variables, model="gemini-flash-latest", tem
     """
     Helper to get a response from a prompt template chain.
     """
-    llm = ChatGoogleGenerativeAI(
+    model_instance = ChatGoogleGenerativeAI(
         model=model,
         google_api_key=API_KEY,
         temperature=temperature
     )
+        
     prompt = PromptTemplate(
         template=template,
         input_variables=list(variables.keys())
     )
-    chain = prompt | llm | StrOutputParser()
+    chain = prompt | model_instance | StrOutputParser()
     return chain.invoke(variables)
 
 def get_vitals_summary(patient_id):
@@ -211,7 +212,7 @@ def get_pediatric_system_prompt(patient_id, patient_stats, mode, history, attach
 
     return system_prompt_content
 
-def generate_chat_summary(history, patient_id, session):
+def generate_chat_summary(history, patient_id, session, model="gemini-flash-latest"):
     """
     Handles incremental or full chat summarization.
     """
@@ -239,12 +240,12 @@ def generate_chat_summary(history, patient_id, session):
             "new_messages_text": new_messages_text,
             "latest_vitals": latest_vitals,
             "current_date": current_date_str
-        })
+        }, model=model)
     else:
         result = get_llm_chain_response(FULL_SUMMARY_TEMPLATE, {
             "new_messages_text": new_messages_text,
             "latest_vitals": latest_vitals,
             "current_date": current_date_str
-        })
+        }, model=model)
     
     return result.replace('```json', '').replace('```', '').strip()

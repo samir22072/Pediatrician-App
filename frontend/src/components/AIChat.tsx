@@ -48,6 +48,8 @@ export default function AIChat({ patientName, patientId, patientStats, onTransfe
     const [userRole, setUserRole] = useState<string | null>(null);
     const [actualRole, setActualRole] = useState<string | null>(null);
     const [isAnalyzingScan, setIsAnalyzingScan] = useState(false);
+    const [selectedModel, setSelectedModel] = useState("gemini-2.5-flash");
+    const [isChatEnded, setIsChatEnded] = useState(false);
 
     // Voice Recording State
     const [recordingTime, setRecordingTime] = useState(0);
@@ -124,6 +126,7 @@ export default function AIChat({ patientName, patientId, patientStats, onTransfe
     const handleCreateSession = async (doctorMode: boolean) => {
         // LAZY CREATION: Just reset UI state. Do not call API.
         setCurrentSessionId(null);
+        setIsChatEnded(false);
         const initialText = doctorMode ? MSG_INIT_DOCTOR : MSG_INIT_PATIENT;
         setMessages([{ id: 'init', sender: 'ai', text: initialText }]);
         if (window.innerWidth < 768) setShowSidebar(false);
@@ -131,6 +134,7 @@ export default function AIChat({ patientName, patientId, patientStats, onTransfe
 
     const selectSession = async (id: string, overrideMode?: boolean, sessionName?: string) => {
         setCurrentSessionId(id);
+        setIsChatEnded(false);
         if (window.innerWidth < 768) setShowSidebar(false);
         try {
             const res = await AIService.getSessionMessages({ sessionId: id });
@@ -384,11 +388,18 @@ export default function AIChat({ patientName, patientId, patientStats, onTransfe
                 patientId: patientId,
                 sessionId: activeSessionId,
                 mode: isDoctorMode ? 'doctor' : 'patient',
-                attachmentId: attachmentId
+                attachmentId: attachmentId,
+                modelName: selectedModel
             });
 
-            const reply = response.data.text;
+            let reply = response.data.text;
             const structured = response.data.structured_data;
+
+            let triageComplete = false;
+            if (reply.includes("[TRIAGE_COMPLETE]")) {
+                triageComplete = true;
+                reply = reply.replace("[TRIAGE_COMPLETE]", "").trim();
+            }
 
             const aiMsg: Message = {
                 id: (Date.now() + 1).toString(),
@@ -396,7 +407,15 @@ export default function AIChat({ patientName, patientId, patientStats, onTransfe
                 text: reply,
                 structuredData: structured
             };
-            setMessages(prev => [...prev, aiMsg]);
+            
+            setMessages(prev => {
+                const newMessages = [...prev, aiMsg];
+                if (triageComplete) {
+                    setIsChatEnded(true);
+                    setTimeout(() => handleGenerateReport(newMessages), 100);
+                }
+                return newMessages;
+            });
             speak(reply);
 
         } catch (err) {
@@ -430,15 +449,17 @@ export default function AIChat({ patientName, patientId, patientStats, onTransfe
         }
     };
 
-    const handleGenerateReport = async () => {
-        if (!currentSessionId || messages.length === 0) return;
+    const handleGenerateReport = async (overrideMessages?: Message[]) => {
+        const msgsToUse = overrideMessages || messages;
+        if (!currentSessionId || msgsToUse.length === 0) return;
         setIsTyping(true);
         try {
-            const history = messages.map(m => ({ role: m.sender, text: m.text }));
+            const history = msgsToUse.map(m => ({ role: m.sender, text: m.text }));
             const res = await AIService.summarize({
                 patientId,
                 history,
-                sessionId: currentSessionId
+                sessionId: currentSessionId,
+                modelName: selectedModel
             });
 
             if (res.data.summary) {
@@ -477,9 +498,9 @@ export default function AIChat({ patientName, patientId, patientStats, onTransfe
     };
 
     return (
-        <Card className="flex flex-col h-full border-0 shadow-none sm:border sm:shadow-lg overflow-hidden">
+        <Card className="flex flex-col h-full border-0 shadow-none sm:border sm:shadow-sm overflow-hidden bg-white">
             {/* Header */}
-            <div className="flex items-center justify-between px-4 py-3 border-b bg-muted/40 shrink-0 h-14">
+            <div className="flex items-center justify-between px-4 py-3 border-b bg-white shrink-0 h-14">
                 <div className="flex items-center gap-3 overflow-hidden">
                     <TooltipProvider>
                         <Tooltip>
@@ -502,7 +523,7 @@ export default function AIChat({ patientName, patientId, patientStats, onTransfe
                     <div className="flex flex-col overflow-hidden">
                         <span className="font-semibold text-sm truncate flex items-center gap-2">
                             {isDoctorMode ? 'Medical Scribe' : 'Pediatric Assistant'}
-                            {isDoctorMode && <Badge variant="secondary" className="text-[10px] h-4 px-1 bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300">MD</Badge>}
+                            {isDoctorMode && <Badge variant="secondary" className="text-[10px] h-4 px-1 bg-teal-50 text-teal-700 border border-teal-200">MD</Badge>}
                         </span>
                         {isTyping && <span className="text-[10px] text-muted-foreground animate-pulse">Thinking...</span>}
                     </div>
@@ -556,9 +577,15 @@ export default function AIChat({ patientName, patientId, patientStats, onTransfe
                         </TooltipProvider>
                     )}
 
-
-
-
+                    {/* Model Selector */}
+                    <Select value={selectedModel} onValueChange={setSelectedModel} disabled={isTyping}>
+                        <SelectTrigger className="h-8 w-[160px] text-xs font-semibold bg-background border-border">
+                            <SelectValue placeholder="Select Model" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="gemini-2.5-flash">Gemini 2.5 Flash</SelectItem>
+                        </SelectContent>
+                    </Select>
 
                     {/* Doctor Mode Toggle - Only show if user is a doctor */}
                     {actualRole === 'doctor' && (
@@ -570,8 +597,8 @@ export default function AIChat({ patientName, patientId, patientStats, onTransfe
                                 className={cn(
                                     "h-7 text-[10px] gap-1 px-2 font-bold uppercase tracking-wider transition-all",
                                     userRole === 'patient'
-                                        ? "bg-primary/10 border-primary/50 text-primary hover:bg-primary/20"
-                                        : "bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800"
+                                        ? "bg-teal-50 border-teal-300 text-teal-700 hover:bg-teal-100"
+                                        : "bg-slate-100 text-slate-600 border-slate-300 hover:bg-slate-200"
                                 )}
                             >
                                 {userRole === 'doctor' ? <Shield size={12} /> : <UserCircle size={12} />}
@@ -586,11 +613,11 @@ export default function AIChat({ patientName, patientId, patientStats, onTransfe
                 {/* Sidebar */}
                 <div
                     className={cn(
-                        "absolute md:relative z-20 h-full bg-background border-r transition-all duration-300 ease-in-out flex flex-col shrink-0",
+                        "absolute md:relative z-20 h-full bg-slate-50 border-r border-border transition-all duration-300 ease-in-out flex flex-col shrink-0",
                         showSidebar ? "w-64 translate-x-0" : "w-0 -translate-x-full md:translate-x-0 md:w-0"
                     )}
                 >
-                    <div className={cn("p-3 border-b flex justify-between items-center bg-muted/20", !showSidebar && "hidden")}>
+                    <div className={cn("p-3 border-b border-border flex justify-between items-center bg-white", !showSidebar && "hidden")}>
                         <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">History</span>
                         <Button variant="ghost" size="icon" onClick={() => handleCreateSession(isDoctorMode)} className="h-7 w-7">
                             <Plus size={14} />
@@ -635,7 +662,7 @@ export default function AIChat({ patientName, patientId, patientStats, onTransfe
                 </div>
 
                 {/* Chat Area */}
-                <div className="flex-1 flex flex-col min-h-0 bg-background/50 relative">
+                <div className="flex-1 flex flex-col min-h-0 bg-slate-50/50 relative">
                     <ScrollArea className="flex-1 p-4" ref={scrollRef}>
                         <div className="space-y-4 max-w-3xl mx-auto pb-4">
                             {messages.map((msg) => (
@@ -658,7 +685,7 @@ export default function AIChat({ patientName, patientId, patientStats, onTransfe
                                             "max-w-[85%] sm:max-w-[75%] rounded-2xl px-4 py-3 shadow-sm text-sm leading-relaxed",
                                             msg.sender === 'user'
                                                 ? "bg-primary text-primary-foreground rounded-tr-none"
-                                                : "bg-muted/80 text-foreground rounded-tl-none border border-border"
+                                                : "bg-white text-foreground rounded-tl-none border border-slate-200 shadow-sm"
                                         )}
                                     >
                                         {msg.imageUrl && (
@@ -669,7 +696,7 @@ export default function AIChat({ patientName, patientId, patientStats, onTransfe
                                             />
                                         )}
                                         {msg.sender === 'ai' ? (
-                                            <div className="prose prose-sm dark:prose-invert max-w-none text-sm leading-relaxed break-words">
+                                            <div className="prose prose-sm max-w-none text-sm leading-relaxed break-words">
                                                 {msg.imageUrl && (
                                                     <img
                                                         src={msg.imageUrl?.startsWith('/') ? `${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'}${msg.imageUrl}` : msg.imageUrl}
@@ -717,6 +744,22 @@ export default function AIChat({ patientName, patientId, patientStats, onTransfe
                                     )}
                                 </div>
                             ))}
+
+                            {/* Typing Indicator */}
+                            {isTyping && (
+                                <div className="flex justify-start gap-3 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                                    <Avatar className="h-8 w-8 mt-1 border shadow-sm hidden sm:block">
+                                        <AvatarImage src="/ai-avatar.png" />
+                                        <AvatarFallback className="bg-primary/10 text-primary text-xs">AI</AvatarFallback>
+                                    </Avatar>
+                                    <div className="bg-white text-foreground rounded-2xl rounded-tl-none px-4 py-4 shadow-sm border border-slate-200 flex items-center gap-1.5 h-[42px]">
+                                        <span className="h-1.5 w-1.5 bg-primary/40 rounded-full animate-bounce [animation-delay:-0.3s]"></span>
+                                        <span className="h-1.5 w-1.5 bg-primary/60 rounded-full animate-bounce [animation-delay:-0.15s]"></span>
+                                        <span className="h-1.5 w-1.5 bg-primary/80 rounded-full animate-bounce"></span>
+                                    </div>
+                                </div>
+                            )}
+
                             {messages.length === 0 && (
                                 <div className="flex flex-col items-center justify-center h-[50vh] text-muted-foreground opacity-50">
                                     <Sparkles size={48} className="mb-4" />
@@ -727,7 +770,7 @@ export default function AIChat({ patientName, patientId, patientStats, onTransfe
                     </ScrollArea>
 
                     {/* Input Area */}
-                    <div className="p-4 bg-background border-t">
+                    <div className="p-4 bg-white border-t border-border">
                         {isListening && (
                             <div className="max-w-3xl mx-auto flex items-center gap-3 w-full bg-destructive/10 border border-destructive/20 rounded-md px-4 py-3 animate-pulse mb-2">
                                 <div className="h-3 w-3 rounded-full bg-destructive animate-ping" />
@@ -779,7 +822,7 @@ export default function AIChat({ patientName, patientId, patientStats, onTransfe
                                     isListening && "animate-pulse ring-2 ring-destructive/50"
                                 )}
                                 onClick={toggleListening}
-                                disabled={isTyping}
+                                disabled={isTyping || isChatEnded}
                             >
                                 {isListening ? <MicOff size={18} /> : <Mic size={18} />}
                             </Button>
@@ -790,7 +833,7 @@ export default function AIChat({ patientName, patientId, patientStats, onTransfe
                                     size="icon"
                                     className="h-10 w-10 shrink-0 rounded-full"
                                     onClick={() => document.getElementById('chat-file-upload')?.click()}
-                                    disabled={isTyping}
+                                    disabled={isTyping || isChatEnded}
                                 >
                                     <Paperclip size={18} />
                                 </Button>
@@ -805,16 +848,16 @@ export default function AIChat({ patientName, patientId, patientStats, onTransfe
                                     value={inputValue}
                                     onChange={(e) => setInputValue(e.target.value)}
                                     onKeyDown={handleKeyDown}
-                                    placeholder={isListening ? "Listening..." : (isTyping ? "Please wait..." : (isDoctorMode ? "Dictate clinical notes..." : "Type or speak symptoms..."))}
-                                    disabled={isTyping}
-                                    className="min-h-[44px] max-h-[120px] resize-none py-3 pr-10 rounded-2xl border-input focus-visible:ring-1 bg-background shadow-sm"
+                                    placeholder={isChatEnded ? "Triage Complete. Chat ended." : (isListening ? "Listening..." : (isTyping ? "Please wait..." : (isDoctorMode ? "Dictate clinical notes..." : "Type or speak symptoms...")))}
+                                    disabled={isTyping || isChatEnded}
+                                    className="min-h-[44px] max-h-[120px] resize-none py-3 pr-10 rounded-2xl border-input focus-visible:ring-1 bg-background shadow-sm disabled:opacity-50"
                                     rows={1}
                                 />
                             </div>
 
                             <Button
                                 onClick={handleSend}
-                                disabled={!inputValue.trim() || isTyping}
+                                disabled={!inputValue.trim() || isTyping || isChatEnded}
                                 size="icon"
                                 className={cn(
                                     "h-10 w-10 shrink-0 rounded-full transition-all",

@@ -112,7 +112,7 @@ export default function PatientDetails({ patient, onBack, onAddVisit, onEditVisi
     };
 
     return (
-        <div className="flex flex-col h-[calc(100vh-80px)] animate-in fade-in zoom-in-95 duration-500 p-6 gap-6">
+        <div className="flex flex-col h-[calc(100vh-64px)] animate-in fade-in zoom-in-95 duration-500 p-6 gap-6 bg-background">
             <NavbarActions>
                 <div className="flex items-center gap-2">
                     {(userRole !== 'patient' || actualRole === 'doctor') && (
@@ -129,10 +129,10 @@ export default function PatientDetails({ patient, onBack, onAddVisit, onEditVisi
 
             <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr] gap-6 h-full min-h-0">
                 {/* Left Sidebar: Patient Profile */}
-                <Card className="h-full flex flex-col gap-6 overflow-hidden">
+                <Card className="h-full flex flex-col gap-6 overflow-hidden bg-white border-border shadow-sm">
                     <CardContent className="p-6 flex flex-col items-center text-center gap-4">
-                        <Avatar className="h-24 w-24">
-                            <AvatarFallback className="text-3xl font-bold bg-primary/10 text-primary">
+                        <Avatar className="h-24 w-24 border-4 border-slate-100 shadow-md">
+                            <AvatarFallback className="text-3xl font-bold bg-teal-50 text-teal-700">
                                 {patient.name.charAt(0)}
                             </AvatarFallback>
                         </Avatar>
@@ -158,15 +158,15 @@ export default function PatientDetails({ patient, onBack, onAddVisit, onEditVisi
                                 <>
                                     <div>
                                         <p className="text-sm font-medium text-muted-foreground mb-1">Weight</p>
-                                        <p className="text-lg font-semibold text-primary">{lastVisit.weight} kg</p>
+                                        <p className="text-lg font-semibold text-blue-600">{lastVisit.weight} kg</p>
                                     </div>
                                     <div>
                                         <p className="text-sm font-medium text-muted-foreground mb-1">Height</p>
-                                        <p className="text-lg font-semibold text-green-600">{lastVisit.height} cm</p>
+                                        <p className="text-lg font-semibold text-emerald-700">{lastVisit.height} cm</p>
                                     </div>
                                     <div>
                                         <p className="text-sm font-medium text-muted-foreground mb-1">Head Circ.</p>
-                                        <p className="text-lg font-semibold text-orange-600">
+                                        <p className="text-lg font-semibold text-amber-600">
                                             {lastVisit.head_circumference ? `${lastVisit.head_circumference} cm` : '--'}
                                         </p>
                                     </div>
@@ -233,7 +233,7 @@ export default function PatientDetails({ patient, onBack, onAddVisit, onEditVisi
                                                     <CardContent className="p-6">
                                                         <div className="flex items-start justify-between mb-4">
                                                             <div className="flex items-center gap-3">
-                                                                <div className="h-12 w-12 bg-purple-100 rounded-lg flex items-center justify-center text-purple-600 dark:bg-purple-900/40 dark:text-purple-300">
+                                                                <div className="h-12 w-12 bg-violet-50 border border-violet-100 rounded-lg flex items-center justify-center text-violet-600">
                                                                     <Scan size={24} />
                                                                 </div>
                                                                 <div>
@@ -310,8 +310,8 @@ export default function PatientDetails({ patient, onBack, onAddVisit, onEditVisi
                                                                         <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2">Findings</h4>
                                                                         <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">{att.scan_analysis?.findings}</p>
                                                                     </div>
-                                                                    <div className="bg-blue-500/10 p-3 rounded-md border border-blue-500/20">
-                                                                        <h4 className="text-xs font-bold uppercase tracking-wider text-blue-400 mb-2">Impression</h4>
+                                                                    <div className="bg-teal-50 p-3 rounded-md border border-teal-200/60">
+                                                                        <h4 className="text-xs font-bold uppercase tracking-wider text-teal-700 mb-2">Impression</h4>
                                                                         <p className="text-sm text-foreground font-medium">{att.scan_analysis?.impression}</p>
                                                                     </div>
                                                                 </>
@@ -351,7 +351,7 @@ export default function PatientDetails({ patient, onBack, onAddVisit, onEditVisi
                                                         <div>
                                                             <div className="flex items-center gap-3 mb-2">
                                                                 <span className="font-bold text-lg">{visit.date}</span>
-                                                                <Badge variant="secondary" className="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
+                                                                <Badge variant="secondary" className="bg-teal-50 text-teal-700 border border-teal-200/70 font-medium">
                                                                     {visit.visit_type}
                                                                 </Badge>
                                                             </div>
