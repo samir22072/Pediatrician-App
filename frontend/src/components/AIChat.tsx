@@ -407,7 +407,7 @@ export default function AIChat({ patientName, patientId, patientStats, onTransfe
                 text: reply,
                 structuredData: structured
             };
-            
+
             setMessages(prev => {
                 const newMessages = [...prev, aiMsg];
                 if (triageComplete) {
@@ -584,6 +584,7 @@ export default function AIChat({ patientName, patientId, patientStats, onTransfe
                         </SelectTrigger>
                         <SelectContent>
                             <SelectItem value="gemini-2.5-flash">Gemini 2.5 Flash</SelectItem>
+                            <SelectItem value="medgemma-1.5-4b-it">MedGemma 1.5 4B</SelectItem>
                         </SelectContent>
                     </Select>
 
